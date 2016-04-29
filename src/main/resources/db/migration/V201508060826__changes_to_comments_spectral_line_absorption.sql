@@ -1,0 +1,10 @@
+COMMENT ON COLUMN casda.spectral_line_absorption.object_id is 'Object identifier for spectral line absorption feature';
+COMMENT ON COLUMN casda.spectral_line_absorption.ra_hms_cont is 'J2000 RA (hh:mm:ss.sss). Taken from the position of the continuum component';
+COMMENT ON COLUMN casda.spectral_line_absorption.dec_dms_cont is 'J2000 Dec  (dd:mm:ss.ss). Taken from the position of the continuum component';
+COMMENT ON COLUMN casda.spectral_line_absorption.ra_deg_cont is 'J2000 RA in decimal degrees. Taken from the position of the continuum component';
+COMMENT ON COLUMN casda.spectral_line_absorption.dec_deg_cont is 'J2000 Dec in decimal degrees. Taken from the position of the continuum component';
+COMMENT ON COLUMN casda.spectral_line_absorption.ra_deg_cont_err is 'Error in ra_deg_cont';
+COMMENT ON COLUMN casda.spectral_line_absorption.dec_deg_cont_err is 'Error in dec_deg_cont';
+COMMENT ON COLUMN casda.spectral_line_absorption.flag_s1 is 'indicates whether the component is unresolved (1), marginally resolved (2) or resolved (3).';
+COMMENT ON COLUMN casda.spectral_line_absorption.flag_s2 is 'Placeholder flag';
+COMMENT ON COLUMN casda.spectral_line_absorption.flag_s3 is 'Placeholder flag';

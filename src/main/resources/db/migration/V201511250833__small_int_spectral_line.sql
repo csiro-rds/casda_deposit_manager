@@ -1,0 +1,1 @@
+update casda.tap_columns set datatype = 'SMALLINT' where column_name in ('flag_s1', 'flag_s2', 'flag_s3') and table_name in ('casda.spectral_line_absorption', 'casda.spectral_line_emission');

@@ -1,0 +1,34 @@
+p, td, th, tr, legend, h1, h2, h3, div, font {
+	font-family: sans-serif;
+}
+
+legend {
+	font-size: 150%;
+	font-weight: bold;
+}
+
+fieldset {
+	padding: 10px;
+}
+
+.centered {
+	text-align: center;
+}
+
+.tableHeader {
+	background: #CCCCCC;
+	border-left: solid 2px black;	
+}
+
+.even {
+	background: #EEEEEE;
+	border-left: solid 1px black;
+}
+
+.odd {
+	background: #FFFFFF; 
+	border-left: solid 1px black;
+}
+.meta {
+	font-size: 75%;
+}

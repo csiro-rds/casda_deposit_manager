@@ -1,0 +1,8 @@
+/build/
+/bin/
+.settings/
+.gradle/
+.project
+.classpath
+.springBeans
+application-casda_deposit_manager.properties

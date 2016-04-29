@@ -1,0 +1,17 @@
+//
+// Flyway (for flywayClean, flywayMigrate, etc.)
+//
+//=====================================================================================================================
+
+    // Locally only (targetEnv is set on Jenkins builds)
+	apply plugin: 'flyway'
+
+	flyway {
+		driver = 'org.postgresql.Driver'
+		url = 'jdbc:postgresql://localhost:5432/casda'
+		user = 'casdbusr'
+		password = 'password'
+		schemas = ['casda']
+		validateOnMigrate = false
+		outOfOrder = true
+	}

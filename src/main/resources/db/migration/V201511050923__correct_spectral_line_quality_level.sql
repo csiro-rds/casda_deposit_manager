@@ -1,0 +1,3 @@
+--correcting the datatypes for the spectral line tables
+UPDATE casda.tap_columns SET datatype = 'VARCHAR', ucd = 'meta.code.qual', size = '15', indexed = 1 where column_name = 'quality_level' and table_name = 'casda.spectral_line_emission';
+UPDATE casda.tap_columns SET datatype = 'VARCHAR', ucd = 'meta.code.qual', size = '15', indexed = 1 where column_name = 'quality_level' and table_name = 'casda.spectral_line_absorption';

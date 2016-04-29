@@ -1,0 +1,15 @@
+update casda.columns set description = 'The date that the spectral line absorption data product was released' where column_name = 'released_date' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'When the row was last modified (usually via an insert)' where column_name = 'last_modified' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'Indicator of quality level, updated by validators' where column_name = 'quality_level' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'Error in z_hi_uw' where column_name = 'z_hi_uw_err' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'Object identifier for spectral line absorption feature' where column_name = 'object_id' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'J2000 RA (hh:mm:ss.sss). Taken from the position of the continuum component' where column_name = 'ra_hms_cont' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'J2000 Dec (dd:mm:ss.sss). Taken from the position of the continuum component' where column_name = 'dec_dms_cont' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'J2000 RA in decimal degrees. Taken from the position of the continuum component' where column_name = 'ra_deg_cont' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'J2000 Dec in decimal degrees. Taken from the position of the continuum component' where column_name = 'dec_deg_cont' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'Error in ra_deg_cont' where column_name = 'ra_deg_cont_err' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'Error in dec_deg_cont' where column_name = 'dec_deg_cont_err' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'indicates whether the component is unresolved (1), marginally resolved (2) or resolved (3). ' where column_name = 'flag_s1' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'Placeholder flag' where column_name = 'flag_s2' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set description = 'Placeholder flag' where column_name = 'flag_s3' and table_name = 'casda.spectral_line_absorption';
+update casda.columns set unit = 'km/s' where column_name = 'opt_depth_int' and table_name = 'casda.spectral_line_absorption';

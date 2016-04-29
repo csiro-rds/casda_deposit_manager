@@ -1,0 +1,1 @@
+update casda.tap_tables set description = 'A project involved in an observation.' where table_name = 'casda.project';

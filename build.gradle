@@ -1,0 +1,186 @@
+/*
+ * Gradle build script for CSIRO CASDA Deposit Manager web application (casda_deposit_manager).
+ * 
+ * Built for Gradle v2.0
+ *
+ * Primary tasks are:
+ *  clean - Remove the contents of the build folder ready for a full rebuild.
+ *  build - Compiles the code, builds the war, and runs the tests (this is the most commonly used command)
+ *  eclipse - Usually after cleanEclipse - rebuild the eclipse (or STS) classpath and so on.
+ */
+buildscript {
+    repositories { 
+        mavenCentral()
+    } 
+    dependencies {
+        classpath("org.hidetake:gradle-ssh-plugin:0.3.10")
+        if (!project.hasProperty('targetEnv')) {    // Local only (targetEnv is set on Jenkins builds)
+            classpath "org.flywaydb:flyway-gradle-plugin:3.0"
+        }
+    }
+}
+
+task wrapper(type: Wrapper) { gradleVersion = '2.6' }
+    
+apply plugin: 'java'
+apply plugin: 'eclipse-wtp'
+apply plugin: 'war'
+apply plugin: 'maven-publish'
+apply plugin: 'ssh'
+    
+group = 'au.csiro'
+
+project.ext.baseName = 'casda_deposit_manager'
+project.description = 'CSIRO CASDA Project - CASDA Deposit Manager'
+        
+ext {
+	majorVersion = 1
+	minorVersion = 2
+	springBootVer = '1.1.12.RELEASE'
+}
+        
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenLocal() // Required when we use locally-built versions of CSIRO projects
+    mavenCentral()
+    maven { url "http://jenkins-cdc.it.csiro.au:8085/nexus/content/repositories/cd/" }
+    maven { url "http://jenkins-cdc.it.csiro.au:8085/nexus/content/repositories/releases/" }
+    maven { url "http://jenkins-cdc.it.csiro.au:8085/nexus/content/repositories/thirdparty/" }
+    maven { url "http://download.osgeo.org/webdav/geotools" }
+    maven { url "http://www.hibernatespatial.org/repository" }
+    jcenter()
+}
+
+configurations { 
+    providedRuntime 
+    all*.exclude group: "org.springframework.boot", module: "spring-boot-starter-logging"
+    all*.exclude group: "xerces", module: "xercesImpl"
+    // exclude the tomcat libraries so they are not included in the war file
+    compile.exclude group:"org.springframework.boot", module: "spring-boot-starter-tomcat"
+    compile.exclude group: "org.apache.tomcat.embed"
+    all*.exclude group: "org.hamcrest", module: "hamcrest-library"
+    all*.exclude group: "org.hamcrest", module: "hamcrest-core"
+}
+
+dependencies {
+    compile ('au.csiro:casda_commons:1.0.165')
+    {
+    	//TODO included because of mismath with casda commons to be removed once both components are working on 
+    	//tomcat 8
+    	exclude(module: 'hibernate-core')
+    }
+    compile('au.csiro:job_manager:1.1.16')
+
+	compile("javax.servlet:javax.servlet-api:3.1.0")
+    compile("org.flywaydb:flyway-core:3.2.1")
+    compile("org.postgresql:postgresql:9.3-1103-jdbc41")
+    compile("org.springframework.boot:spring-boot-starter-integration:${springBootVer}")
+    compile("org.springframework.boot:spring-boot-starter-actuator:${springBootVer}")
+    compile("org.springframework.boot:spring-boot-starter-web:${springBootVer}")
+    compile("org.springframework.boot:spring-boot-starter-data-jpa:${springBootVer}")
+    compile("org.springframework.boot:spring-boot-starter-ws:${springBootVer}") 
+    compile("org.springframework.boot:spring-boot-starter-security:${springBootVer}")
+
+    // Swagger UI for showing interactive API docs    
+    compile("com.mangofactory:swagger-springmvc:1.0.2")
+    compile "org.ajar:swagger-spring-mvc-ui:0.4"
+    
+    // REST client
+    compile group: 'org.apache.cxf', name: 'cxf-rt-rs-client', version:'3.1.2'
+    
+	//jstl and jasper needed for the jsp rendering to work
+    compile("jstl:jstl:1.2")
+    
+    // for spatial tools such as JTS
+    compile("org.hibernate:hibernate-spatial:4.3") {
+        //use newer version of postgres driver
+        exclude(module: 'postgresql')
+    }
+
+
+	//****************//
+	// TEST LIBRARIES //
+	//****************//  
+       
+    testCompile("com.h2database:h2:1.4.188")
+    testCompile("org.springframework.boot:spring-boot-starter-test:${springBootVer}")
+    
+    // For testing JSON Path expressions
+    testCompile("com.jayway.jsonpath:json-path:0.8.1")
+    
+    // for json de/serialisation tests. Currently only being used for one test which need a reflective comparison 
+    //of objects in AbstractMarshallingTest.java can probably be removed when a newer version of hamcrest features 
+    //a reflective comparison 'matcher'
+    testCompile 'org.unitils:unitils-core:3.4.2'
+    
+    // More matchers than hamcrest-core included by JUnit
+    testCompile("org.hamcrest:java-hamcrest:2.0.0.0")
+}
+
+apply from: 'gradle/versioning.gradle'
+
+war {
+    duplicatesStrategy = "EXCLUDE"
+    baseName = 'casda_deposit_manager'
+}
+war.dependsOn makeVersionProps
+
+tasks.withType(Test) { 
+    if (System.getProperty('env')) {
+        systemProperty 'env', System.getProperty('env')
+    } 
+}
+
+//=====================================================================================================================
+//
+// Include other build files
+//
+//=====================================================================================================================
+
+// Produces pmd, findbugs and checkstyle reports.
+apply from: 'gradle/report.gradle'
+
+// Produces jacoco code coverage report.
+apply from: 'gradle/coverage-report.gradle'
+
+// We conditionally apply the publish script so that we don't need the properties for all builds.
+if (gradle.startParameter.taskNames.any{it =~ /publish/}) {
+    apply from: 'gradle/publish.gradle'
+}
+
+// We conditionally apply the deploy script so that we don't need the properties for all builds.
+if (gradle.startParameter.taskNames.contains('deployToServer')) {
+    apply from: 'gradle/deploy.gradle'
+}
+
+// The status task hits the CASDA Rules service's health check and throws an exception if its not healthy
+if (gradle.startParameter.taskNames.contains('status')) {
+    apply from: 'gradle/status.gradle'
+}
+
+if (!project.hasProperty('targetEnv') && gradle.startParameter.taskNames.any{it =~ /flyway/}) { // Only called locally
+    apply from: 'gradle/local.flyway.gradle'
+}
+
+if (!project.hasProperty('targetEnv') && gradle.startParameter.taskNames.any{it =~ /[lL]ocal/ }) { // Only called locally
+    apply from: 'gradle/local.tomcat.gradle'
+}
+
+processResources {
+    from("src/main/resources") {
+        include "application.properties"
+        expand(project.properties) 
+    }
+}
+
+//=====================================================================================================================
+//
+// Eclipse Configuration
+//
+//=====================================================================================================================
+
+eclipse {
+    project { natures 'org.springsource.ide.eclipse.gradle.core.nature' }
+}

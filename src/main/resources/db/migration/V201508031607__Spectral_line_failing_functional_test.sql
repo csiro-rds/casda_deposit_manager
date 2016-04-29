@@ -1,0 +1,1 @@
+UPDATE casda.columns SET ucd = null where column_name = 'released_date' and table_name = 'casda.spectral_line_absorption';
