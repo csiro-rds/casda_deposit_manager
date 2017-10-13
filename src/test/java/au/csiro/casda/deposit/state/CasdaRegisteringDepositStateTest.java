@@ -98,7 +98,7 @@ public class CasdaRegisteringDepositStateTest
         casdaToolProcessJobBuilder.setCommand("REGISTER_TOOL");
         casdaToolProcessJobBuilder.addCommandArguments(Utils.elStringToArray(ngas));
 
-        Catalogue artefact = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue artefact = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         artefact.setFilename("filename");
         artefact.setParent(new Level7Collection(123));
         Map<String, String> map = new HashMap<>();

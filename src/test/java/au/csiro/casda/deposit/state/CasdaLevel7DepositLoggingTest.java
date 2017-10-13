@@ -71,7 +71,7 @@ public class CasdaLevel7DepositLoggingTest
     private CasdaDepositableArtefactEntity createDepositableArtefactWithLevel7ParentInState(Type depositStateType,
             String filename)
     {
-        Catalogue depositableArtefact = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue depositableArtefact = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         depositableArtefact.setFilename(filename);
 
         DepositState depositState = mock(DepositState.class);

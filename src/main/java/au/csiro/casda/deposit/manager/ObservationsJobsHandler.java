@@ -1,6 +1,8 @@
 package au.csiro.casda.deposit.manager;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.commons.io.Charsets;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +26,7 @@ import au.csiro.casda.deposit.DepositManagerEvents;
 import au.csiro.casda.deposit.exception.ImportException;
 import au.csiro.casda.deposit.exception.PollingException;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
+import au.csiro.casda.deposit.services.ObservationService;
 import au.csiro.casda.entity.observation.Observation;
 import au.csiro.casda.jobmanager.CasdaToolProcessJobBuilder;
 import au.csiro.casda.jobmanager.JobManager;
@@ -83,6 +87,7 @@ public class ObservationsJobsHandler
 
     private static final String READY_FILE_NAME = "READY";
     private static final String DONE_FILE_NAME = "DONE";
+    private static final String ERROR_FILE_NAME = "ERROR";
 
     /** The name of the observation importer command. */
     private static final String OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME = "observation_import";
@@ -99,6 +104,8 @@ public class ObservationsJobsHandler
 
     private ObservationRepository observationRepository;
 
+    private ObservationService observationService;
+
     /**
      * Creates an ObservationJobsHandler configured with the given params
      * 
@@ -112,6 +119,8 @@ public class ObservationsJobsHandler
      *            used to configure the command extension of the external process used to import the observation
      * @param jobManager
      *            a JobManager that will be used to import the observation metadata files
+     * @param observationService
+     *            an ObservationService used to report failed observation jobs
      * @param observationRepository
      *            an ObservationRepository used to access information about existing Observations
      */
@@ -121,6 +130,7 @@ public class ObservationsJobsHandler
             @Value("${deposit.tools.installation.directory}") String depositToolsInstallationDirectory,
             @Value("${deposit.tools.script.extension}") String depositToolsScriptExtension,
             @Qualifier("observationImportJobManager") JobManager jobManager,
+            ObservationService observationService,
             ObservationRepository observationRepository)
     {
         this.processJobFactory = processJobFactory;
@@ -128,6 +138,7 @@ public class ObservationsJobsHandler
         this.depositToolsWorkingDirectory = depositToolsWorkingDirectory;
         this.depositToolsScriptExtension = depositToolsScriptExtension;
         this.depositToolsInstallationDirectory = depositToolsInstallationDirectory;
+        this.observationService = observationService;
         this.observationRepository = observationRepository;
     }
 
@@ -145,6 +156,8 @@ public class ObservationsJobsHandler
         logger.debug("ObservationJobsHandler.run() - Poll directory for new observations: "
                 + depositObservationParentDirectory);
 
+        observationService.clearInvalidObservationIds();
+        
         List<Path> paths = findNewObservationDirs(depositObservationParentDirectory);
 
         if (paths != null)
@@ -184,7 +197,14 @@ public class ObservationsJobsHandler
         {
             if (observationDirHasFile(obsDir, READY_FILE_NAME) && !observationDirHasFile(obsDir, DONE_FILE_NAME))
             {
-                readyNotDonePaths.add(obsDir);
+                if (observationDirHasFile(obsDir, ERROR_FILE_NAME))
+                {
+                    observationService.addInvalidObservation(obsDir.getFileName().toString());
+                }
+                else
+                {
+                    readyNotDonePaths.add(obsDir);
+                }
             }
         }
         return readyNotDonePaths;
@@ -263,6 +283,7 @@ public class ObservationsJobsHandler
      *             if the jobManager process fails. The Job manager is responsible for running the @link
      *             ObservationCommandLineImporter.
      */
+    @SuppressWarnings("finally")//we want the exception in the finally block to replace the original exception
     void runJob(Path observationDir) throws ImportException
     {
         logger.debug("ObservationJobsHandler.runJob() - observationDir: {}", observationDir);
@@ -275,48 +296,88 @@ public class ObservationsJobsHandler
         }
         catch (NumberFormatException | DataAccessException e)
         {
-            throw new ImportException(sbid, e);
+            try
+            {
+                //create an error file here. so this observation isn't retried by the poll until it is fixed
+                OutputStreamWriter output =
+                        new OutputStreamWriter(new FileOutputStream(observationDir + "/ERROR"), Charsets.UTF_8);
+                output.write(e.getMessage());
+                output.close();
+            }
+            finally
+            {
+                throw new ImportException(OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME, sbid, observationDir.toString(), 
+                        e.getMessage());
+            }
+            
+            
         }
         if (observation == null)
         {
-
-            String jobId = OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME + "-" + sbid;
-            String obsXmlFilePath = observationDir.resolve(OBSERVATION_XML_FILE_NAME).toString();
-            String jobPath = observationDir.resolve(OBSERVATION_XML_FILE_NAME).toString();
-
-            ProcessJob importJob =
-                    new CasdaToolProcessJobBuilder(this.processJobFactory, this.depositToolsWorkingDirectory,
-                            this.depositToolsInstallationDirectory, this.depositToolsScriptExtension)
-                                    .setCommand(OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME)
-                                    .addCommandArgument("-sbid", sbid).addCommandArgument("-infile", jobPath)
-                                    .createJob(jobId, OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME);
-            jobManager.startJob(importJob);
-            JobStatus jobStatus = jobManager.getJobStatus(jobId);
-            while (!(jobStatus.isFinished() || jobStatus.isFailed()))
-            {
-                try
-                {
-                    Thread.sleep(SLEEP_TIME_BETWEEN_CHECKING_IF_DEPOSIT_JOB_FINISHED);
-                }
-                catch (InterruptedException e)
-                {
-                    throw new ImportException(sbid, e);
-                }
-                jobStatus = jobManager.getJobStatus(jobId);
-            }
-            if (jobStatus.isFailed())
-            {
-                logger.error("Job {} failed during observation import with output :{}", jobId,
-                        jobStatus.getJobOutput());
-                throw new ImportException(OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME, sbid, obsXmlFilePath,
-                        jobStatus.getFailureCause());
-            }
-            else
-            {
-                // LOG E35 - new data
-                logger.info(DepositManagerEvents.E035.messageBuilder().add(sbid).toString());
-            }
+            importObservation(observationDir, sbid, false);
         }
 
+    }
+
+    private synchronized void importObservation(Path observationDir, String sbid, boolean redeposit)
+            throws ImportException
+    {
+        String jobId = OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME + "-" + sbid;
+        String obsXmlFilePath = observationDir.resolve(OBSERVATION_XML_FILE_NAME).toString();
+        String jobPath = observationDir.resolve(OBSERVATION_XML_FILE_NAME).toString();
+
+        CasdaToolProcessJobBuilder jobBuilder =
+                new CasdaToolProcessJobBuilder(this.processJobFactory, this.depositToolsWorkingDirectory,
+                        this.depositToolsInstallationDirectory, this.depositToolsScriptExtension)
+                                .setCommand(OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME)
+                                .addCommandArgument("-sbid", sbid).addCommandArgument("-infile", jobPath);
+        if (redeposit)
+        {
+            jobBuilder.addCommandSwitch("-redeposit");
+        }
+        ProcessJob importJob = jobBuilder.createJob(jobId, OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME);
+        jobManager.startJob(importJob);
+        JobStatus jobStatus = jobManager.getJobStatus(jobId);
+        while (!(jobStatus.isFinished() || jobStatus.isFailed()))
+        {
+            try
+            {
+                Thread.sleep(SLEEP_TIME_BETWEEN_CHECKING_IF_DEPOSIT_JOB_FINISHED);
+            }
+            catch (InterruptedException e)
+            {
+                throw new ImportException(sbid, e);
+            }
+            jobStatus = jobManager.getJobStatus(jobId);
+        }
+        if (jobStatus.isFailed())
+        {
+            logger.error("Job {} failed during observation import with output :{}", jobId, jobStatus.getJobOutput());
+            observationService.addInvalidObservation(sbid);
+            throw new ImportException(OBSERVATION_COMMAND_LINE_IMPORTER_TOOL_NAME, sbid, obsXmlFilePath,
+                    jobStatus.getFailureCause());
+        }
+        else
+        {
+            // LOG E35 - new data
+            logger.info(DepositManagerEvents.E035.messageBuilder().add(sbid).toString());
+        }
+    }
+    
+    /**
+     * Reopen an observation for deposit and initiate the deposit of any new artefacts.
+     * 
+     * @param depositObservationParentDirectory The directory in which the observation directory resides 
+     * @param sbid The scheduling block id of the observation.
+     * @throws ImportException If the import of the observation fails.
+     */
+    public void redepositObservation(String depositObservationParentDirectory, int sbid) throws ImportException
+    {
+        Observation observation = observationRepository.findBySbid(sbid);
+        if (observation != null)
+        {
+            Path observationDir = Paths.get(depositObservationParentDirectory, String.valueOf(sbid));
+            importObservation(observationDir, String.valueOf(sbid), true);
+        }
     }
 }

@@ -1,5 +1,9 @@
 package au.csiro.casda.deposit.services;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+
 /*
  * #%L
  * CSIRO ASKAP Science Data Archive
@@ -20,8 +24,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.transaction.Transactional;
-
 import org.apache.commons.collections4.CollectionUtils;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -30,13 +32,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import au.csiro.casda.BadRequestException;
 import au.csiro.casda.ResourceNotFoundException;
 import au.csiro.casda.ServerException;
+import au.csiro.casda.Utils;
 import au.csiro.casda.datadeposit.DepositState;
 import au.csiro.casda.deposit.DepositManagerEvents;
+import au.csiro.casda.deposit.SingleJobMonitorFactory;
+import au.csiro.casda.deposit.jpa.ObservationRefreshRepository;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
 import au.csiro.casda.deposit.jpa.ValidationNoteRepository;
 import au.csiro.casda.dto.DataProductDTO;
@@ -47,11 +54,19 @@ import au.csiro.casda.entity.CasdaDataProductEntity;
 import au.csiro.casda.entity.QualityFlag;
 import au.csiro.casda.entity.ValidationNote;
 import au.csiro.casda.entity.observation.Catalogue;
+import au.csiro.casda.entity.observation.Cubelet;
+import au.csiro.casda.entity.observation.EvaluationFile;
 import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.MeasurementSet;
+import au.csiro.casda.entity.observation.MomentMap;
 import au.csiro.casda.entity.observation.Observation;
 import au.csiro.casda.entity.observation.Project;
 import au.csiro.casda.entity.observation.QualityLevel;
+import au.csiro.casda.entity.observation.Spectrum;
+import au.csiro.casda.jobmanager.ProcessJob;
+import au.csiro.casda.jobmanager.ProcessJobBuilder.ProcessJobFactory;
+import au.csiro.casda.jobmanager.SimpleToolProcessJobBuilder;
+import au.csiro.casda.jobmanager.SingleJobMonitor;
 import au.csiro.casda.logging.CasdaLogMessageBuilderFactory;
 import au.csiro.casda.logging.LogEvent;
 import au.csiro.casda.services.dto.Message.MessageCode;
@@ -75,15 +90,43 @@ public class ObservationService
     private ObservationRepository observationRepository;
 
     @Autowired
+    private ObservationRefreshRepository observationRefreshRepository;
+    
+    @Autowired
     private ValidationNoteRepository validationNoteRepository;
 
     @Autowired
     private QualityService qualityService;
 
     @Autowired
+    private ProcessJobFactory processJobFactory;
+
+    @Autowired
+    private SingleJobMonitorFactory singleJobMonitorFactory;
+
+    @Autowired
     @Value("${job.manager.recent.age.hours}")
     private int maxAgeOfRecentCompletedJobs;
 
+    @Autowired
+    @Value("${deposit.tools.working.directory}")
+    private String depositToolsWorkingDirectory;
+
+    @Autowired
+    @Value("${build.catalogue.hips.command.and.args}")
+    private String buildCatalogueHipsCommandAndArgs;
+
+    private List<String> invalidObsIds;
+
+    
+    /**
+     * Create a new instance of the ObservationService
+     */
+    public ObservationService()
+    {
+        invalidObsIds = new ArrayList<String>();
+    }
+    
     /**
      * Retrieve the list of project blocks that are not yet released.
      * 
@@ -93,6 +136,9 @@ public class ObservationService
     {
         Set<ObservationProjectDataProductsDTO> unreleasedProjectBlocks = new HashSet<>();
         unreleasedProjectBlocks.addAll(observationRepository.findDepositedProjectBlocksWithUnreleasedImageCubes());
+        unreleasedProjectBlocks.addAll(observationRepository.findDepositedProjectBlocksWithUnreleasedSpectra());
+        unreleasedProjectBlocks.addAll(observationRepository.findDepositedProjectBlocksWithUnreleasedMomentMaps());
+        unreleasedProjectBlocks.addAll(observationRepository.findDepositedProjectBlocksWithUnreleasedCubelets());
         unreleasedProjectBlocks.addAll(observationRepository.findDepositedProjectBlocksWithUnreleasedCatalogues());
         unreleasedProjectBlocks.addAll(observationRepository.findDepositedProjectBlocksWithUnreleasedMeasurementSets());
         return unreleasedProjectBlocks;
@@ -119,10 +165,45 @@ public class ObservationService
         Set<ObservationProjectDataProductsDTO> releasedObservations = new HashSet<>();
         releasedObservations.addAll(observationRepository.findProjectBlocksWithReleasedImageCubesAfterDate(projectCode,
                 timestamp));
+        releasedObservations.addAll(observationRepository.findProjectBlocksWithReleasedSpectraAfterDate(projectCode,
+                timestamp));
+        releasedObservations.addAll(observationRepository.findProjectBlocksWithReleasedMomentMapsAfterDate(projectCode,
+                timestamp));
+        releasedObservations.addAll(observationRepository.findProjectBlocksWithReleasedCubeletsAfterDate(projectCode,
+                timestamp));
         releasedObservations.addAll(observationRepository.findProjectBlocksWithReleasedMeasurementSetsAfterDate(
                 projectCode, timestamp));
         releasedObservations.addAll(observationRepository.findProjectBlocksWithReleasedCataloguesAfterDate(projectCode,
                 timestamp));
+        return releasedObservations;
+    }
+
+    /**
+     * Retrieve a list of project blocks for observations refreshed since the given date.
+     * 
+     * @param date
+     *            Returns all observations refreshed after this date
+     * @return A set of project blocks (project code, observation's sbid), all will have the same project code
+     */
+    public Set<ObservationProjectDataProductsDTO> getRefreshedProjectBlocks(Long date)
+    {
+        if (date == null)
+        {
+            date = 0L;
+        }
+        DateTime timestamp = new DateTime(date.longValue(), DateTimeZone.UTC);
+        
+        List<Long> obsIds = observationRefreshRepository.getIdsOfObservationsRefreshedSince(timestamp);
+
+        Set<ObservationProjectDataProductsDTO> releasedObservations = new HashSet<>();
+        if (CollectionUtils.isNotEmpty(obsIds))
+        {
+            releasedObservations.addAll(observationRepository.findProjectBlocksWithImageCubes(obsIds));
+            releasedObservations.addAll(observationRepository.findProjectBlocksWithSpectra(obsIds));
+            releasedObservations.addAll(observationRepository.findProjectBlocksWithMomentMaps(obsIds));
+          	releasedObservations.addAll(observationRepository.findProjectBlocksWithCubelets(obsIds));
+        
+        }
         return releasedObservations;
     }
 
@@ -169,26 +250,28 @@ public class ObservationService
                             "Not all data products are validated for project block with sbid %d and project code %s",
                             sbid, opalCode));
                 }
-                cat.setReleasedDate(releasedDate);
-                // update the catalogue rows
-
-                String query =
-                        "UPDATE casda." + cat.getCatalogueType().name().toLowerCase()
-                                + " SET released_date=?, last_modified=? WHERE catalogue_id=?";
-
-                // converting released date and last modified to Date because it is a recognised
-                // sql types.
-                int response =
-                        jdbcTemplate.update(query, releasedDate.toDate(), DateTime.now(DateTimeZone.UTC).toDate(),
-                                cat.getId());
-
-                logger.info("Updated released date for {} catalogue rows in {} for catalogue id {} to {}", response,
-                        cat.getCatalogueType().name().toLowerCase(), cat.getId(), releasedDate);
+                if (cat.getReleasedDate() == null)
+                {
+                    cat.setReleasedDate(releasedDate);
+                    // update the catalogue rows
+    
+                    String query = "UPDATE casda." + cat.getCatalogueType().name().toLowerCase()
+                            + " SET released_date=?, last_modified=? WHERE catalogue_id=? and released_date is NULL";
+    
+                    // converting released date and last modified to Date because it is a recognised
+                    // sql types.
+                    int response =
+                            jdbcTemplate.update(query, releasedDate.toDate(), DateTime.now(DateTimeZone.UTC).toDate(),
+                                    cat.getId());
+    
+                    logger.info("Updated released date for {} catalogue rows in {} for catalogue id {} to {}", response,
+                            cat.getCatalogueType().name().toLowerCase(), cat.getId(), releasedDate);
+                }
 
                 hasDataProducts = true;
             }
         }
-
+        
         for (MeasurementSet measurementSet : observation.getMeasurementSets())
         {
             if (opalCode.equals(measurementSet.getProject().getOpalCode()))
@@ -199,7 +282,10 @@ public class ObservationService
                             "Not all data products are validated for project block with sbid %d and project code %s",
                             sbid, opalCode));
                 }
-                measurementSet.setReleasedDate(releasedDate);
+                if (measurementSet.getReleasedDate() == null)
+                {
+                    measurementSet.setReleasedDate(releasedDate);
+                }
                 hasDataProducts = true;
             }
         }
@@ -214,11 +300,82 @@ public class ObservationService
                             "Not all data products are validated for project block with sbid %d and project code %s",
                             sbid, opalCode));
                 }
-                imageCube.setReleasedDate(releasedDate);
+                if (imageCube.getReleasedDate() == null)
+                {
+                    imageCube.setReleasedDate(releasedDate);
+                }
                 hasDataProducts = true;
             }
         }
 
+
+        for (Spectrum spectrum : observation.getSpectra())
+        {
+            if (opalCode.equals(spectrum.getProject().getOpalCode()))
+            {
+                if (spectrum.getQualityLevel() == QualityLevel.NOT_VALIDATED)
+                {
+                    throw new BadRequestException(String.format(
+                            "Not all data products are validated for project block with sbid %d and project code %s",
+                            sbid, opalCode));
+                }
+                if (spectrum.getReleasedDate() == null)
+                {
+                    spectrum.setReleasedDate(releasedDate);
+                }
+                hasDataProducts = true;
+            }
+        }
+
+
+        for (MomentMap momentMap : observation.getMomentMaps())
+        {
+            if (opalCode.equals(momentMap.getProject().getOpalCode()))
+            {
+                if (momentMap.getQualityLevel() == QualityLevel.NOT_VALIDATED)
+                {
+                    throw new BadRequestException(String.format(
+                            "Not all data products are validated for project block with sbid %d and project code %s",
+                            sbid, opalCode));
+                }
+                if (momentMap.getReleasedDate() == null)
+                {
+                    momentMap.setReleasedDate(releasedDate);
+                }
+                hasDataProducts = true;
+            }
+        }
+
+        for (Cubelet cubelet : observation.getCubelets())
+        {
+            if (opalCode.equals(cubelet.getProject().getOpalCode()))
+            {
+                if (cubelet.getQualityLevel() == QualityLevel.NOT_VALIDATED)
+                {
+                    throw new BadRequestException(String.format(
+                            "Not all data products are validated for project block with sbid %d and project code %s",
+                            sbid, opalCode));
+                }
+                if (cubelet.getReleasedDate() == null)
+                {
+                	cubelet.setReleasedDate(releasedDate);
+                }
+                hasDataProducts = true;
+            }
+        }
+        
+        for (EvaluationFile ef : observation.getEvaluationFiles())
+        {
+            if (opalCode.equals(ef.getProject().getOpalCode()))
+            {
+                if (ef.getReleasedDate() == null)
+                {
+                    ef.setReleasedDate(releasedDate);
+                }
+                hasDataProducts = true;
+            }
+        }
+        
         if (!hasDataProducts)
         {
 
@@ -281,6 +438,18 @@ public class ObservationService
     {
         DateTime recentCutoff = DateTime.now(DateTimeZone.UTC).minusHours(maxAgeOfRecentCompletedJobs);
         return observationRepository.findObservationsCompletedSince(recentCutoff);
+    }
+
+    /**
+     * Retrieve a list of observations recently failed (e.g. in the last 3 months).
+     * 
+     * @param recentCutoff
+     *            The earliest failed date to be included.
+     * @return List of observations recently failed.
+     */
+    public List<Observation> findObservationsFailedSince(DateTime recentCutoff)
+    {
+        return observationRepository.findObservationsFailedSince(recentCutoff);
     }
 
     /**
@@ -391,6 +560,30 @@ public class ObservationService
                     depositable = imageCube.get();
                 }
                 break;
+            case SPECTRUM:
+                Optional<Spectrum> spectrum =
+                        observation.getSpectra().stream().filter(ic -> ic.getId() == dataProduct.getId()).findFirst();
+                if (spectrum.isPresent())
+                {
+                    depositable = spectrum.get();
+                }
+                break;
+            case MOMENT_MAP:
+                Optional<MomentMap> momentMap =
+                        observation.getMomentMaps().stream().filter(ic -> ic.getId() == dataProduct.getId()).findFirst();
+                if (momentMap.isPresent())
+                {
+                    depositable = momentMap.get();
+                }
+                break;
+            case CUBELET:
+                Optional<Cubelet> cubelet =
+                        observation.getCubelets().stream().filter(ic -> ic.getId() == dataProduct.getId()).findFirst();
+                if (cubelet.isPresent())
+                {
+                    depositable = cubelet.get();
+                }
+                break;
             case MEASUREMENT_SET:
                 Optional<MeasurementSet> measurementSet =
                         observation.getMeasurementSets().stream().filter(ms -> ms.getId() == dataProduct.getId())
@@ -449,12 +642,50 @@ public class ObservationService
         }
         validationNote.setPersonId(validationNoteDto.getUserId());
         validationNote.setPersonName(validationNoteDto.getUserName());
-        validationNote.setProjectId(project.getId());
+        validationNote.setProject(project);
         validationNote.setSbid(sbid);
         validationNote = validationNoteRepository.save(validationNote);
         return new ValidationNoteDTO(validationNote);
     }
 
+    
+    /**
+     * Scheduled job which regenerates the catalogue HiPS for each catalogue type. 
+     */
+    @Scheduled(cron = "${catalogue.regen.period}")
+    public void regenerateCatalogueHips()
+    {
+        logger.info("Started regenerating catalogue HiPS");
+        
+        String[] catalogueTypes = new String[] { "continuum_component", "continuum_island", "polarisation_component",
+                "spectral_line_absorption", "spectral_line_emission" };
+        
+        for (String catType : catalogueTypes)
+        {
+            logger.info("Regenerating HiPS for " + catType + " ...");
+            String jobId = String.format("Genhips-%s", catType);
+            List<String> commandParts = new ArrayList<>();
+            commandParts.addAll(Arrays.asList(Utils.elStringToArray(buildCatalogueHipsCommandAndArgs)));
+            SimpleToolProcessJobBuilder processBuilder =
+                    new SimpleToolProcessJobBuilder(this.processJobFactory, commandParts.toArray(new String[] {}));
+            processBuilder.setProcessParameter("catalogueType", catType);
+
+            processBuilder.setWorkingDirectory(depositToolsWorkingDirectory);
+
+            // Run extract job inline
+            ProcessJob job = processBuilder.createJob(jobId, "Catalogue_hips");
+            SingleJobMonitor monitor = singleJobMonitorFactory.createSingleJobMonitor();
+            
+            job.run(monitor);
+            if (monitor.isJobFailed())
+            {
+                logger.error("Failed to regenerate HiPS for " + catType + ": " + monitor.getJobOutput());
+            }
+        }
+
+        logger.info("Finished regenerating catalogue HiPS.");
+    }
+    
     private Observation findObservation(Integer sbid) throws ResourceNotFoundException
     {
         Observation observation = observationRepository.findBySbid(sbid);
@@ -475,6 +706,36 @@ public class ObservationService
                     "Observation %d does not have any data products for project %s", observation.getSbid(), opalCode));
         }
         return project.get();
+    }
+
+    /**
+     * @return A sorted copy of the list of invalid observations
+     */
+    public synchronized List<String> getInvalidObservationIds()
+    {
+        List<String> sortedList = new ArrayList<>(invalidObsIds);
+        Collections.sort(sortedList);
+        return sortedList;
+    }
+
+    /**
+     * Add an entry to the list of invalid observations.
+     * @param sbid The scheduling block id of the invalid observation.xml
+     */
+    public synchronized void addInvalidObservation(String sbid)
+    {
+        if (!invalidObsIds.contains(sbid))
+        {
+            invalidObsIds.add(sbid);
+        }
+    }
+
+    /**
+     * Reset the list of invalid observations to be empty.
+     */
+    public synchronized void clearInvalidObservationIds()
+    {
+        invalidObsIds.clear();
     }
 
 }

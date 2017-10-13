@@ -92,7 +92,6 @@ public class OpalProjectServiceImpl implements OpalProjectService
 
     /**
      * {@inheritDoc}
-     * @throws BadRequestException 
      */
     @Override
     public Project updateProjectWithOpalData(String opalCode, String shortName, String principalFirstName,

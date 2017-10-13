@@ -24,11 +24,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
-import javax.transaction.Transactional;
-
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,18 +38,34 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.google.common.collect.Lists;
+
+import au.csiro.casda.ResourceNotFoundException;
+import au.csiro.casda.ServerException;
+import au.csiro.casda.datadeposit.ChildDepositableArtefact;
+import au.csiro.casda.datadeposit.DepositState;
+import au.csiro.casda.datadeposit.DepositState.Type;
 import au.csiro.casda.datadeposit.DepositStateChangeListener;
 import au.csiro.casda.datadeposit.DepositStateFactory;
+import au.csiro.casda.datadeposit.Level7CollectionUnvalidatedDepositState;
+import au.csiro.casda.datadeposit.PreparingDepositState;
+import au.csiro.casda.datadeposit.UndepositedDepositState;
+import au.csiro.casda.deposit.DepositManagerEvents;
 import au.csiro.casda.deposit.jpa.Level7CollectionRepository;
 import au.csiro.casda.deposit.jpa.ProjectRepository;
 import au.csiro.casda.dto.ParentDepositableDTO;
+import au.csiro.casda.entity.CasdaDataProductEntity;
 import au.csiro.casda.entity.observation.Catalogue;
 import au.csiro.casda.entity.observation.CatalogueType;
 import au.csiro.casda.entity.observation.Level7Collection;
 import au.csiro.casda.entity.observation.Project;
 import au.csiro.casda.logging.CasdaLogMessageBuilderFactory;
 import au.csiro.casda.logging.LogEvent;
+import au.csiro.casda.services.dto.Message.MessageCode;
+import au.csiro.casda.services.dto.MessageDTO;
 
 /**
  * Deposit service for level 7 catalogues.
@@ -165,19 +180,33 @@ public class Level7DepositService
      *            the project's opal code
      * @param dapCollectionId
      *            the data collection id (from Data Access Portal)
+     * @param dcCommonId
+     *            The base collection id shared by all versions of this data collection.
      * @return newly created Level7Collection
      * @throws CollectionIllegalStateException
      *             if the level 7 collection has no files, or if the level 7 collection deposit has already been
      *             initiated
      */
-    @Transactional(value = Transactional.TxType.REQUIRED, rollbackOn = Exception.class)
-    public Level7Collection initiateLevel7CollectionDeposit(String opalCode, long dapCollectionId)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    public Level7Collection initiateLevel7CollectionDeposit(String opalCode, long dapCollectionId, int dcCommonId)
             throws CollectionIllegalStateException
     {
-        if (level7CollectionRepository.findByDapCollectionId(dapCollectionId) != null)
+        Level7Collection level7Collection = level7CollectionRepository.findByDapCollectionId(dapCollectionId); 
+        if (level7Collection != null)
         {
-            throw new CollectionIllegalStateException(String.format(
-                    "Level 7 collection with id '%s' deposit has already been initiated", dapCollectionId));
+            Type depositStateType = level7Collection.getDepositStateType();
+            if (depositStateType == Type.INVALID || depositStateType == Type.VALIDATING
+                    || depositStateType == Type.PREPARING)
+            {
+                throw new CollectionIllegalStateException(String.format(
+                        "Level 7 collection with id '%s' has not been validated yet", dapCollectionId));
+            }
+            else if (!(depositStateType == Type.VALID || (depositStateType == Type.FAILED
+                    && level7Collection.getCheckpointStateType() == Type.UNDEPOSITED)))
+            {
+                throw new CollectionIllegalStateException(String
+                        .format("Level 7 collection with id '%s' deposit has already been initiated", dapCollectionId));
+            }
         }
         if (!new File(level7CollectionsDirectory, Long.toString(dapCollectionId)).exists())
         {
@@ -185,6 +214,131 @@ public class Level7DepositService
                     "Level 7 collection with id '%s' has no items to deposit", dapCollectionId));
         }
 
+        if (level7Collection == null)
+        {
+            // This is a level 7 catalogue collection
+            level7Collection = buildLevel7Collection(opalCode, dapCollectionId, dcCommonId);
+            final Level7Collection l7cat =  level7Collection;
+            // add a catalogue for all of the files in the folder
+            try (DirectoryStream<Path> level7CatalogueFiles =
+                    Files.newDirectoryStream(Paths.get(level7CollectionsDirectory, Long.toString(dapCollectionId))))
+            {
+                level7CatalogueFiles.forEach(level7CatalogueFile -> {
+                    if (!level7CatalogueFile.getFileName().toString().endsWith(".checksum"))
+                    {
+                        Catalogue catalogue = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
+                        catalogue.setFormat("votable");
+                        catalogue.setFilename(level7CatalogueFile.getFileName().toString());
+                        l7cat.addCatalogue(catalogue);
+                    }
+                });
+            }
+            catch (IOException e)
+            {
+                throw new RuntimeException(e);
+            }
+
+            if (level7Collection.getCatalogues().isEmpty())
+            {
+                throw new CollectionIllegalStateException(String.format(
+                        "Level 7 collection with id '%s' has no items to deposit", dapCollectionId));
+            }
+        }
+        else
+        {
+            // This is a level 7 image/spectra collection
+            level7Collection.setDepositState(new UndepositedDepositState(depositStateFactory, level7Collection));
+        }
+
+        return level7CollectionRepository.save(level7Collection);
+    }
+
+    /**
+     * Triggers the validation process for a level 7 image collection.
+     * 
+     * @param opalCode
+     *            the project's opal code
+     * @param dapCollectionId
+     *            the data collection id (from Data Access Portal)
+     * @param sbids
+     * 			  The sbids to attach to this level 7 collection
+     * @return the updated Level7Collection 
+     * @throws CollectionIllegalStateException
+     *             if the level 7 collection does not yet exist, or has already been validated
+     * @throws CollectionProjectCodeMismatchException
+     *             if the level 7 collection with the specified dap collection id has a different opal project code to
+     *             the one specified
+     */
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    public Level7Collection initiateLevel7CollectionValidate(String opalCode, long dapCollectionId, Integer[] sbids)
+            throws CollectionIllegalStateException, CollectionProjectCodeMismatchException
+    {
+        Level7Collection level7Collection = getLevel7Collection(opalCode, dapCollectionId);
+        if (level7Collection == null)
+        {
+            throw new CollectionIllegalStateException(
+                    String.format("Level 7 collection with id '%s' has not been created", dapCollectionId));
+        }
+        if(sbids != null && sbids.length > 0)
+        {
+        	level7Collection.setSbids(Lists.newArrayList(sbids));
+        }
+        
+        Type depositStatetype = level7Collection.getDepositStateType();
+        if (depositStatetype != DepositState.Type.PREPARING && depositStatetype != DepositState.Type.INVALID
+                && !(depositStatetype == DepositState.Type.FAILED
+                        && (level7Collection.getCheckpointStateType() == DepositState.Type.VALIDATING
+                                || level7Collection.getCheckpointStateType() == DepositState.Type.UNVALIDATED)))
+        {
+            throw new CollectionIllegalStateException(String
+                    .format("Level 7 collection with id '%s' validation has already been initiated", dapCollectionId));
+        }
+
+        // We only pass in the collection as the processing is triggered asynchronously by progressCollections
+        if (depositStatetype == DepositState.Type.FAILED)
+        {
+            level7Collection.recoverDeposit();
+        }
+        else
+        {
+        	level7Collection.cleanCollectionArtefacts();
+            level7Collection.setDepositState(
+                    new Level7CollectionUnvalidatedDepositState(null, level7Collection, null, null, null));
+        }
+        return level7CollectionRepository.save(level7Collection);
+    }
+
+    /**
+     * Creates a new level 7 collection with no files from the parameters passed to the method. The collection will be
+     * in a predeposit state.
+     * 
+     * @param opalCode
+     *            the project's opal code
+     * @param dapCollectionId
+     *            the data collection id (from Data Access Portal)
+     * @param dcCommonId
+     *            The base collection id shared by all versions of this data collection.
+     * @return newly created Level7Collection
+     * @throws CollectionIllegalStateException
+     *             if the level 7 collection deposit has already been initiated
+     */
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    public Level7Collection createEmptyLevel7Collection(String opalCode, long dapCollectionId, int dcCommonId)
+            throws CollectionIllegalStateException
+    {
+        if (level7CollectionRepository.findByDapCollectionId(dapCollectionId) != null)
+        {
+            throw new CollectionIllegalStateException(String.format(
+                    "Level 7 collection with id '%s' deposit has already been initiated", dapCollectionId));
+        }
+
+        Level7Collection level7Collection = buildLevel7Collection(opalCode, dapCollectionId, dcCommonId);
+        level7Collection.setDepositState(new PreparingDepositState(null, level7Collection));
+        return level7CollectionRepository.save(level7Collection);
+    }
+    
+    private Level7Collection buildLevel7Collection(String opalCode, long dapCollectionId, int dcCommonId)
+    {
         Level7Collection level7Collection = new Level7Collection(dapCollectionId);
         Project project = projectRepository.findByOpalCode(opalCode);
         if (project == null)
@@ -192,32 +346,8 @@ public class Level7DepositService
             project = new Project(opalCode);
         }
         level7Collection.setProject(project);
-
-        // add a catalogue for all of the files in the folder
-        try (DirectoryStream<Path> level7CatalogueFiles =
-                Files.newDirectoryStream(Paths.get(level7CollectionsDirectory, Long.toString(dapCollectionId))))
-        {
-            level7CatalogueFiles.forEach(level7CatalogueFile -> {
-                if (!level7CatalogueFile.getFileName().toString().endsWith(".checksum"))
-                {
-                    Catalogue catalogue = new Catalogue(CatalogueType.LEVEL7);
-                    catalogue.setFormat("votable");
-                    catalogue.setFilename(level7CatalogueFile.getFileName().toString());
-                    level7Collection.addCatalogue(catalogue);
-                }
-            });
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
-
-        if (level7Collection.getCatalogues().isEmpty())
-        {
-            throw new CollectionIllegalStateException(String.format(
-                    "Level 7 collection with id '%s' has no items to deposit", dapCollectionId));
-        }
-        return level7CollectionRepository.save(level7Collection);
+        level7Collection.setDcCommonId(dcCommonId);
+        return level7Collection;
     }
 
     /**
@@ -274,7 +404,7 @@ public class Level7DepositService
      *             if the level 7 collection with the specified dap collection id has a different opal project code to
      *             the one specified
      */
-    @Transactional(value = Transactional.TxType.REQUIRED)
+    @Transactional(propagation = Propagation.REQUIRED)
     public ParentDepositableDTO getLevel7CollectionSummary(String opalCode, Long dapCollectionId)
             throws CollectionProjectCodeMismatchException
     {
@@ -306,11 +436,36 @@ public class Level7DepositService
     }
 
     /**
+     * Returns a level 7 collection object for the collection, if one already exists.
+     * 
+     * @param opalCode
+     *            the project's opal code
+     * @param dapCollectionId
+     *            the data collection id (from Data Access Portal)
+     * @return a Level7Collection
+     * @throws CollectionProjectCodeMismatchException
+     *             if the level 7 collection with the specified dap collection id has a different opal project code to
+     *             the one specified
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public Level7Collection getLevel7Collection(String opalCode, Long dapCollectionId)
+            throws CollectionProjectCodeMismatchException
+    {
+        Level7Collection level7Collection = level7CollectionRepository.findByDapCollectionId(dapCollectionId);
+        if (level7Collection != null && !level7Collection.getProject().getOpalCode().equals(opalCode))
+        {
+            throw new CollectionProjectCodeMismatchException(level7Collection, opalCode);
+        }
+        
+        return level7Collection;
+    }
+
+    /**
      * Saves the contents of the fileInputStream to a file with the supplied name to the appropriate level 7 collection
      * deposit directory for the give collection id.
      * 
      * @param dapCollectionId
-     *            the data collection id (from Data Access Portal) - must be > 0
+     *            the data collection id (from Data Access Portal) - must be &gt; 0
      * @param filename
      *            the name of the level 7 collection file (may not be blank)
      * @param fileInputStream
@@ -370,7 +525,7 @@ public class Level7DepositService
      * @throws CollectionIllegalStateException
      *             if the level 7 collection has not failed
      */
-    @Transactional(value = Transactional.TxType.REQUIRED, rollbackOn = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void recoverFailedLevel7CollectionDeposit(String opalCode, long dapCollectionId)
             throws UnknownCollectionException, CollectionProjectCodeMismatchException, CollectionIllegalStateException
     {
@@ -394,4 +549,112 @@ public class Level7DepositService
         level7Collection.recoverDeposit();
         level7CollectionRepository.save(level7Collection);
     }
+
+    /**
+     * Update the file paths of the level 7 collection.
+     * 
+     * @param level7Collection
+     *            The collection to be updated.
+     * @param imageCubePath
+     *            The path to the image cubes.
+     * @param spectrumPath
+     *            The path to the spectra.
+     * @param momentMapPath
+     *            The path to the moment maps.
+     * @param cubeletPath
+     *            The path to the cubelets.
+     */
+    public void updateFilePaths(Level7Collection level7Collection, String imageCubePath, String spectrumPath,
+            String momentMapPath, String cubeletPath)
+    {
+        level7Collection.setImageCubePath(imageCubePath);
+        level7Collection.setSpectrumPath(spectrumPath);
+        level7Collection.setMomentMapPath(momentMapPath);
+        level7Collection.setCubeletPath(cubeletPath);
+        level7CollectionRepository.save(level7Collection);
+    }
+
+
+    /**
+     * Set the release date of the project block (project and observation combination) to now
+     * 
+     * @param opalCode
+     *            the project's code in OPAL
+     * @param dapCollectionId
+     *            the data collection id (from Data Access Portal)
+     * @param releasedDate
+     *            the release date to set. Note we are using {@link DateTime} which contains timezone information;
+     *            timezone should be set to UTC
+     * 
+     * @return MessageDTO with information about success/failure
+     * @throws UnknownCollectionException
+     *             If the collection cannot be found.
+     * @throws CollectionProjectCodeMismatchException
+     *             if the level 7 collection with the specified dap collection id has a different opal project code to
+     *             the one specified
+     * @throws ResourceNotFoundException
+     *             if a deposited level 7 collection with the given collection ID could not be found
+     */
+    @Transactional
+    public MessageDTO releaseLevel7Collection(String opalCode, long dapCollectionId, DateTime releasedDate)
+            throws UnknownCollectionException, CollectionProjectCodeMismatchException, ResourceNotFoundException
+    {
+        Level7Collection level7Collection = level7CollectionRepository.findByDapCollectionId(dapCollectionId);
+        if (level7Collection == null)
+        {
+            throw new UnknownCollectionException(dapCollectionId);
+        }
+        if (!level7Collection.getProject().getOpalCode().equals(opalCode))
+        {
+            throw new CollectionProjectCodeMismatchException(level7Collection, opalCode);
+        }
+
+        
+        if (!level7Collection.isDeposited())
+        {
+            String message = "Level 7 collection " + dapCollectionId + " has not finished depositing";
+            logger.error(CasdaLogMessageBuilderFactory.getCasdaMessageBuilder(LogEvent.UNKNOWN_EVENT).add(message)
+                    .toString());
+            throw new ResourceNotFoundException(message);
+        }
+
+        List<ChildDepositableArtefact> depositableArtefacts = level7Collection.getDepositableArtefacts();
+        
+        setArtefactsReleaseDate(depositableArtefacts, releasedDate);
+
+        try
+        {
+            level7CollectionRepository.save(level7Collection);
+            String message =
+                    CasdaLogMessageBuilderFactory.getCasdaMessageBuilder(DepositManagerEvents.E089).add(dapCollectionId)
+                            .add(opalCode).toString();
+            logger.info(message);
+            return new MessageDTO(MessageCode.SUCCESS, message);
+        }
+        catch (Exception e)
+        {
+            String message =
+                    CasdaLogMessageBuilderFactory.getCasdaMessageBuilder(DepositManagerEvents.E086).add(dapCollectionId)
+                            .add(opalCode).toString();
+            logger.error(message);
+            throw new ServerException(message, e);
+        }
+    }
+
+    private boolean setArtefactsReleaseDate(List<ChildDepositableArtefact> depositableArtefacts, DateTime releasedDate)
+    {
+        boolean hasDataProducts = false;
+        
+        for (ChildDepositableArtefact childDepositableArtefact : depositableArtefacts)
+        {
+            if (childDepositableArtefact instanceof CasdaDataProductEntity)
+            {
+                CasdaDataProductEntity dataProduct = (CasdaDataProductEntity) childDepositableArtefact;
+                dataProduct.setReleasedDate(releasedDate);
+                hasDataProducts = true;
+            }
+        }
+        return hasDataProducts;
+    }
+
 }

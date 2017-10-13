@@ -53,12 +53,16 @@ public class VoToolsService
      * 
      * @param voToolsUrl
      *            the VO Tools url
+     * @param connectionTimeout
+     *            the connection timeout value  
      */
     @Autowired
-    public VoToolsService(@Value("${casda.vo.tools.url}") String voToolsUrl)
+    public VoToolsService(@Value("${casda.vo.tools.url}") String voToolsUrl, 
+    					  @Value("${connection.timeout.limit: " 
+    					+ SecuredRestTemplate.DEFAULT_RESTTEMPLATE_CONNECT_TIMEOUT + "}") Integer connectionTimeout)
     {
         super();
-        this.restTemplate = createRestTemplate();
+        this.restTemplate = createRestTemplate(connectionTimeout);
         this.voToolsUrl = voToolsUrl;
     }
 
@@ -135,13 +139,14 @@ public class VoToolsService
 
     /**
      * Creates a new rest template, forcing json request and responses
-     * 
+     * @param connectionTimeout
+     *            the connection timeout value  
      * @return the rest template
      */
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    protected SecuredRestTemplate createRestTemplate()
+    protected SecuredRestTemplate createRestTemplate(Integer connectionTimeout)
     {
-        SecuredRestTemplate restTemplate = new SecuredRestTemplate();
+        SecuredRestTemplate restTemplate = new SecuredRestTemplate(connectionTimeout);
         // Force JSON request and response
         restTemplate.setMessageConverters((List) Arrays.asList(new MappingJackson2HttpMessageConverter()));
         return restTemplate;

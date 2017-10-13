@@ -70,7 +70,7 @@ public class CasdaObservationNotifyingDepositState extends ObservationNotifyingD
     @Override
     public void progress()
     {
-        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId());
+        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId(RTC_NOTIFIER_TOOL_NAME));
         if (jobStatus == null)
         {
             jobManager
@@ -78,14 +78,15 @@ public class CasdaObservationNotifyingDepositState extends ObservationNotifyingD
                             .setCommand(RTC_NOTIFIER_TOOL_NAME)
                             .addCommandArgument("-infile",
                                     this.depositObservationParentDirectory.resolve(getSbid()).toString())
-                            .addCommandArgument("-sbid", getSbid()).createJob(getJobId(), RTC_NOTIFIER_TOOL_NAME));
+                            .addCommandArgument("-sbid", getSbid()).createJob
+                            (getJobId(RTC_NOTIFIER_TOOL_NAME), RTC_NOTIFIER_TOOL_NAME));
         }
         else if (jobStatus.isFinished())
         {
             if (jobStatus.isFailed())
             {
-                logger.error("Job {} failed while notifying observation deposit state with output :{}", getJobId(),
-                        jobStatus.getJobOutput());
+                logger.error("Job {} failed while notifying observation deposit state with output :{}", 
+                		getJobId(RTC_NOTIFIER_TOOL_NAME), jobStatus.getJobOutput());
                 transitionTo(DepositState.Type.FAILED);
             }
             else
@@ -102,12 +103,6 @@ public class CasdaObservationNotifyingDepositState extends ObservationNotifyingD
     public Observation getDepositable()
     {
         return (Observation) super.getDepositable();
-    }
-
-    private String getJobId()
-    {
-        return String.format("%s-%s-%d", RTC_NOTIFIER_TOOL_NAME, getDepositable().getUniqueIdentifier(), getDepositable()
-                .getDepositFailureCount());
     }
 
     private String getSbid()

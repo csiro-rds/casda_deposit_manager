@@ -41,11 +41,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import jdk.nashorn.internal.ir.annotations.Ignore;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -54,9 +54,11 @@ import org.junit.rules.TemporaryFolder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import au.csiro.casda.ResourceNotFoundException;
 import au.csiro.casda.datadeposit.DepositState;
 import au.csiro.casda.datadeposit.DepositStateChangeListener;
 import au.csiro.casda.datadeposit.DepositStateFactory;
+import au.csiro.casda.datadeposit.IntermediateDepositState;
 import au.csiro.casda.datadeposit.StagedDepositState;
 import au.csiro.casda.datadeposit.StagingDepositState;
 import au.csiro.casda.deposit.jpa.Level7CollectionRepository;
@@ -66,8 +68,12 @@ import au.csiro.casda.dto.DepositableArtefactDTO;
 import au.csiro.casda.dto.ParentDepositableDTO;
 import au.csiro.casda.entity.observation.Catalogue;
 import au.csiro.casda.entity.observation.CatalogueType;
+import au.csiro.casda.entity.observation.Cubelet;
+import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.Level7Collection;
+import au.csiro.casda.entity.observation.MomentMap;
 import au.csiro.casda.entity.observation.Project;
+import au.csiro.casda.entity.observation.Spectrum;
 
 /**
  * Tests the level 7 deposit service.
@@ -119,7 +125,7 @@ public class Level7DepositServiceTest
 
         when(level7CollectionRepository.findByDapCollectionId(123L)).thenReturn(new Level7Collection(123L));
 
-        level7DepositService.initiateLevel7CollectionDeposit("ABC123", 123);
+        level7DepositService.initiateLevel7CollectionDeposit("ABC123", 123, 123);
     }
 
     @Test
@@ -136,7 +142,7 @@ public class Level7DepositServiceTest
 
         when(level7CollectionRepository.save(any(Level7Collection.class))).then(returnsFirstArg());
 
-        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 123);
+        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 123, 123);
 
         Project project = level7Collection.getProject();
         assertNotNull(project);
@@ -152,7 +158,7 @@ public class Level7DepositServiceTest
 
         when(level7CollectionRepository.findByDapCollectionId(123L)).thenReturn(null);
 
-        level7DepositService.initiateLevel7CollectionDeposit("ABC123", 123);
+        level7DepositService.initiateLevel7CollectionDeposit("ABC123", 123, 123);
     }
 
     @Test
@@ -165,7 +171,7 @@ public class Level7DepositServiceTest
         exception.expect(Level7DepositService.CollectionIllegalStateException.class);
         exception.expectMessage("Level 7 collection with id '515199' has no items to deposit");
 
-        level7DepositService.initiateLevel7CollectionDeposit("ABC213", 515199);
+        level7DepositService.initiateLevel7CollectionDeposit("ABC213", 515199, 123);
     }
 
     @Test
@@ -180,7 +186,7 @@ public class Level7DepositServiceTest
         exception.expect(Level7DepositService.CollectionIllegalStateException.class);
         exception.expectMessage("Level 7 collection with id '515199' has no items to deposit");
 
-        level7DepositService.initiateLevel7CollectionDeposit("ABC213", 515199);
+        level7DepositService.initiateLevel7CollectionDeposit("ABC213", 515199, 123);
     }
 
     @Test
@@ -200,7 +206,7 @@ public class Level7DepositServiceTest
 
         when(level7CollectionRepository.save(any(Level7Collection.class))).then(returnsFirstArg());
 
-        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 124);
+        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 124, 123);
 
         Project project = level7Collection.getProject();
         assertEquals(knownProject, project);
@@ -228,7 +234,7 @@ public class Level7DepositServiceTest
 
         when(level7CollectionRepository.save(any(Level7Collection.class))).then(returnsFirstArg());
 
-        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 125);
+        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 125, 123);
 
         Project project = level7Collection.getProject();
         assertEquals("ABC123", project.getOpalCode());
@@ -245,7 +251,7 @@ public class Level7DepositServiceTest
         {
             assertEquals("votable", catalogue.getFormat());
             assertNull(catalogue.getFilesize());
-            assertEquals(CatalogueType.LEVEL7, catalogue.getCatalogueType());
+            assertEquals(CatalogueType.DERIVED_CATALOGUE, catalogue.getCatalogueType());
         }
 
         verify(level7CollectionRepository, times(1)).save(eq(level7Collection));
@@ -276,7 +282,7 @@ public class Level7DepositServiceTest
 
         when(level7CollectionRepository.save(any(Level7Collection.class))).then(returnsFirstArg());
 
-        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 125);
+        Level7Collection level7Collection = level7DepositService.initiateLevel7CollectionDeposit("ABC123", 125, 123);
 
         Project project = level7Collection.getProject();
         assertEquals("ABC123", project.getOpalCode());
@@ -293,7 +299,7 @@ public class Level7DepositServiceTest
         {
             assertEquals("votable", catalogue.getFormat());
             assertNull(catalogue.getFilesize());
-            assertEquals(CatalogueType.LEVEL7, catalogue.getCatalogueType());
+            assertEquals(CatalogueType.DERIVED_CATALOGUE, catalogue.getCatalogueType());
         }
 
         verify(level7CollectionRepository, times(1)).save(eq(level7Collection));
@@ -420,7 +426,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogueFile1.getName());
         assertThat(catalogueFile1Dto, is(notNullValue()));
         assertThat(catalogueFile1Dto.getDepositState(), is(DepositStateDTO.BUILDING_DEPOSIT));
-        assertThat(catalogueFile1Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogueFile1Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogueFile1Dto.getFilename(), equalTo(catalogueFile1.getName()));
         assertThat(catalogueFile1Dto.getFilesizeInBytes(), equalTo(catalogueFile1.length()));
         assertThat(catalogueFile1Dto.getChecksum(), equalTo(FileUtils.readFileToString(checksumFile1)));
@@ -429,7 +435,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogueFile2.getName());
         assertThat(catalogueFile2Dto, is(notNullValue()));
         assertThat(catalogueFile2Dto.getDepositState(), is(DepositStateDTO.BUILDING_DEPOSIT));
-        assertThat(catalogueFile2Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogueFile2Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogueFile2Dto.getFilename(), equalTo(catalogueFile2.getName()));
         assertThat(catalogueFile2Dto.getFilesizeInBytes(), equalTo(catalogueFile2.length()));
         assertThat(catalogueFile2Dto.getChecksum(), is(nullValue()));
@@ -450,7 +456,7 @@ public class Level7DepositServiceTest
         collection.setDepositState(depositingDepositState);
 
         Catalogue catalogue1 = new Catalogue();
-        catalogue1.setCatalogueType(CatalogueType.LEVEL7);
+        catalogue1.setCatalogueType(CatalogueType.DERIVED_CATALOGUE);
         catalogue1.setProject(project);
         catalogue1.setFilename("catalogue1");
         catalogue1.setDepositState(depositingDepositState);
@@ -480,7 +486,7 @@ public class Level7DepositServiceTest
         collection.setDepositState(depositingDepositState);
 
         Catalogue catalogue1 = new Catalogue();
-        catalogue1.setCatalogueType(CatalogueType.LEVEL7);
+        catalogue1.setCatalogueType(CatalogueType.DERIVED_CATALOGUE);
         catalogue1.setProject(project);
         catalogue1.setFilename("catalogue1");
         catalogue1.setDepositState(depositingDepositState);
@@ -488,7 +494,7 @@ public class Level7DepositServiceTest
         collection.addCatalogue(catalogue1);
 
         Catalogue catalogue2 = new Catalogue();
-        catalogue2.setCatalogueType(CatalogueType.LEVEL7);
+        catalogue2.setCatalogueType(CatalogueType.DERIVED_CATALOGUE);
         catalogue2.setProject(project);
         catalogue2.setFilename("catalogue2");
         catalogue2.setDepositState(depositingDepositState);
@@ -509,7 +515,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogue1.getFilename());
         assertThat(catalogueFile1Dto, is(notNullValue()));
         assertThat(catalogueFile1Dto.getDepositState(), is(DepositStateDTO.DEPOSITING));
-        assertThat(catalogueFile1Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogueFile1Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogueFile1Dto.getFilename(), equalTo(catalogue1.getFilename()));
         assertThat(catalogueFile1Dto.getFilesizeInBytes(), equalTo(catalogue1.getFilesize()));
         assertThat(catalogueFile1Dto.getChecksum(), is(nullValue()));
@@ -518,7 +524,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogue2.getFilename());
         assertThat(catalogueFile2Dto, is(notNullValue()));
         assertThat(catalogueFile2Dto.getDepositState(), is(DepositStateDTO.DEPOSITING));
-        assertThat(catalogueFile2Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogueFile2Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogueFile2Dto.getFilename(), equalTo(catalogue2.getFilename()));
         assertThat(catalogueFile2Dto.getFilesizeInBytes(), equalTo(catalogue2.getFilesize()));
         assertThat(catalogueFile2Dto.getChecksum(), is(nullValue()));
@@ -538,7 +544,7 @@ public class Level7DepositServiceTest
         collection.setDepositState(depositingDepositState);
 
         Catalogue catalogue1 = new Catalogue();
-        catalogue1.setCatalogueType(CatalogueType.LEVEL7);
+        catalogue1.setCatalogueType(CatalogueType.DERIVED_CATALOGUE);
         catalogue1.setProject(project);
         catalogue1.setFilename("catalogue1");
         catalogue1.setDepositState(depositingDepositState);
@@ -546,7 +552,7 @@ public class Level7DepositServiceTest
         collection.addCatalogue(catalogue1);
 
         Catalogue catalogue2 = new Catalogue();
-        catalogue2.setCatalogueType(CatalogueType.LEVEL7);
+        catalogue2.setCatalogueType(CatalogueType.DERIVED_CATALOGUE);
         catalogue2.setProject(project);
         catalogue2.setFilename("catalogue2");
         catalogue2.setDepositState(depositingDepositState);
@@ -570,7 +576,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogue1.getFilename());
         assertThat(catalogue1Dto, is(notNullValue()));
         assertThat(catalogue1Dto.getDepositState(), is(DepositStateDTO.DEPOSITING));
-        assertThat(catalogue1Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogue1Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogue1Dto.getFilename(), equalTo(catalogue1.getFilename()));
         assertThat(catalogue1Dto.getFilesizeInBytes(), equalTo(catalogue1.getFilesize()));
         assertThat(catalogue1Dto.getChecksum(), is(nullValue()));
@@ -579,7 +585,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogue2.getFilename());
         assertThat(catalogue2Dto, is(notNullValue()));
         assertThat(catalogue2Dto.getDepositState(), is(DepositStateDTO.DEPOSITING));
-        assertThat(catalogue2Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogue2Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogue2Dto.getFilename(), equalTo(catalogue2.getFilename()));
         assertThat(catalogue2Dto.getFilesizeInBytes(), equalTo(catalogue2.getFilesize()));
         assertThat(catalogue2Dto.getChecksum(), is(nullValue()));
@@ -599,7 +605,7 @@ public class Level7DepositServiceTest
         collection.setDepositState(depositingDepositState);
 
         Catalogue catalogue1 = new Catalogue();
-        catalogue1.setCatalogueType(CatalogueType.LEVEL7);
+        catalogue1.setCatalogueType(CatalogueType.DERIVED_CATALOGUE);
         catalogue1.setProject(project);
         catalogue1.setFilename("catalogue1");
         catalogue1.setDepositState(depositingDepositState);
@@ -607,7 +613,7 @@ public class Level7DepositServiceTest
         collection.addCatalogue(catalogue1);
 
         Catalogue catalogue2 = new Catalogue();
-        catalogue2.setCatalogueType(CatalogueType.LEVEL7);
+        catalogue2.setCatalogueType(CatalogueType.DERIVED_CATALOGUE);
         catalogue2.setProject(project);
         catalogue2.setFilename("catalogue2");
         catalogue2.setDepositState(depositingDepositState);
@@ -658,7 +664,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogue1.getFilename());
         assertThat(catalogue1Dto, is(notNullValue()));
         assertThat(catalogue1Dto.getDepositState(), is(DepositStateDTO.DEPOSITING));
-        assertThat(catalogue1Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogue1Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogue1Dto.getFilename(), equalTo(catalogue1.getFilename()));
         assertThat(catalogue1Dto.getFilesizeInBytes(), equalTo(catalogue1.getFilesize()));
         assertThat(catalogue1Dto.getChecksum(), equalTo(FileUtils.readFileToString(checksumFile4)));
@@ -667,7 +673,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogue2.getFilename());
         assertThat(catalogue2Dto, is(notNullValue()));
         assertThat(catalogue2Dto.getDepositState(), is(DepositStateDTO.DEPOSITING));
-        assertThat(catalogue2Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogue2Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogue2Dto.getFilename(), equalTo(catalogue2.getFilename()));
         assertThat(catalogue2Dto.getFilesizeInBytes(), equalTo(catalogue2.getFilesize()));
         assertThat(catalogue2Dto.getChecksum(), is(nullValue()));
@@ -676,7 +682,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogueFile1.getName());
         assertThat(catalogueFile1Dto, is(notNullValue()));
         assertThat(catalogueFile1Dto.getDepositState(), is(DepositStateDTO.BUILDING_DEPOSIT));
-        assertThat(catalogueFile1Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogueFile1Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogueFile1Dto.getFilename(), equalTo(catalogueFile1.getName()));
         assertThat(catalogueFile1Dto.getFilesizeInBytes(), equalTo(catalogueFile1.length()));
         assertThat(catalogueFile1Dto.getChecksum(), equalTo(FileUtils.readFileToString(checksumFile1)));
@@ -685,7 +691,7 @@ public class Level7DepositServiceTest
                 level7CollectionSummary.getDepositableArtefactForFilename(catalogueFile2.getName());
         assertThat(catalogueFile2Dto, is(notNullValue()));
         assertThat(catalogueFile2Dto.getDepositState(), is(DepositStateDTO.BUILDING_DEPOSIT));
-        assertThat(catalogueFile2Dto.getDepositableTypeDescription(), equalTo("Level 7 Catalogue"));
+        assertThat(catalogueFile2Dto.getDepositableTypeDescription(), equalTo("Derived Catalogue"));
         assertThat(catalogueFile2Dto.getFilename(), equalTo(catalogueFile2.getName()));
         assertThat(catalogueFile2Dto.getFilesizeInBytes(), equalTo(catalogueFile2.length()));
         assertThat(catalogueFile2Dto.getChecksum(), is(nullValue()));
@@ -705,7 +711,6 @@ public class Level7DepositServiceTest
         level7DepositService.recoverFailedLevel7CollectionDeposit(opalCode, collectionId);
     }
 
-    @Ignore
     @Test
     public void testRecoverFailedLevel7CollectionDepositForMismatchedProjectCode() throws Exception
     {
@@ -772,4 +777,67 @@ public class Level7DepositServiceTest
         verify(collection).recoverDeposit();
         verify(level7CollectionRepository).save(collection);
     }
+
+    @Test
+    public void testReleaseLevel7CollectionCollectionNotFound() throws Exception
+    {
+        exception.expect(Level7DepositService.UnknownCollectionException.class);
+        exception.expectMessage("Could not find level 7 collection with id '123'");
+
+        when(level7CollectionRepository.findByDapCollectionId(123)).thenReturn(null);
+        level7DepositService.releaseLevel7Collection("ABC123", 123, DateTime.now(DateTimeZone.UTC));
+    }
+
+    @Test
+    public void testReleaseLevel7CollectionCollectionNotDeposited() throws Exception
+    {
+        exception.expect(ResourceNotFoundException.class);
+        exception.expectMessage("Level 7 collection 123 has not finished depositing");
+
+        String opalCode = "ABC123";
+        
+        Project project = new Project(opalCode);
+        Level7Collection level7Collection = new Level7Collection();
+        level7Collection.setProject(project);
+        
+        level7Collection
+                .setDepositState(new IntermediateDepositState(DepositState.Type.DEPOSITING, null, level7Collection));
+        when(level7CollectionRepository.findByDapCollectionId(123)).thenReturn(level7Collection);
+        level7DepositService.releaseLevel7Collection(opalCode, 123, DateTime.now(DateTimeZone.UTC));
+    }
+
+    @Test
+    public void testReleaseLevel7Collection() throws Exception
+    {
+        String opalCode = "ABC123";
+        
+        Project project = new Project(opalCode);
+        Level7Collection level7Collection = new Level7Collection();
+        level7Collection.setProject(project);
+        level7Collection
+                .setDepositState(new IntermediateDepositState(DepositState.Type.DEPOSITED, null, level7Collection));
+        ImageCube imageCube = new ImageCube(project);
+        ImageCube imageCube2 = new ImageCube(project);
+        level7Collection.addImageCube(imageCube);
+        level7Collection.addImageCube(imageCube2);
+        Spectrum spectrum = new Spectrum(project);
+        level7Collection.addSpectra(spectrum);
+        MomentMap mom = new MomentMap(project);
+        level7Collection.addMomentMap(mom);
+        Cubelet cube = new Cubelet(project);
+        level7Collection.addCubelet(cube);
+
+        assertThat(imageCube.getReleasedDate(), is(nullValue()));
+        
+        when(level7CollectionRepository.findByDapCollectionId(123)).thenReturn(level7Collection);
+        DateTime releasedDate = DateTime.now(DateTimeZone.UTC);
+        level7DepositService.releaseLevel7Collection(opalCode, 123, releasedDate);
+        
+        assertThat(imageCube.getReleasedDate(), is(releasedDate));
+        assertThat(imageCube2.getReleasedDate(), is(releasedDate));
+        assertThat(spectrum.getReleasedDate(), is(releasedDate));
+        assertThat(mom.getReleasedDate(), is(releasedDate));
+        assertThat(cube.getReleasedDate(), is(releasedDate));
+    }
+
 }

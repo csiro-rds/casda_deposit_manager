@@ -6,21 +6,53 @@ This web application provides various CASDA data deposit web services as well as
 The web services facilitate the following
 
 * Synchronising Projects between DAP and CASDA - the OpalProjectController provides methods to list new (ie: unknown) projects and to flag existing projects as known.
-* Synchronising released Observations between DAP and CASA - the ObservationController provides methods to list released or unreleased Observations and to flag an Observation as released.
+* Synchronising released Observations between DAP and CASDA - the ObservationController provides methods to list released or unreleased Observations and to flag an Observation as released.
+* Deposit of Level 7 catalogue and image collections from DAP to CASDA - the Level7DepositProcessingController provides the methods used by DAP to manage level 7 collection deposits.
 
-The depositing of observations runs using an asynchronous task that starts on application startup and which uses the DepositManagerService.progressObservations(). The processing of data products within an observation is driven by ObservationDepositingDepositState.progress() in the casda_commons project.
+The depositing of observations uses an asynchronous task that starts on application startup and which uses the DepositManagerService.progressObservations(). 
+The processing of data products within an observation is driven by ParentDepositableArtefactDepositingDepositState.progress().
+Each deposit state implementation is responsible for taking all actions required by that state. 
+e.g. The parsing of catalogue files is managed by the CasdaCatalogueProcessingDepositState.progress() method.
+The CasdaDepositStateFactory class is responsible for creating the DepositState implementations.
 
 The DepositManagerService is responsible for managing the data deposit 'workflow' described [here] (https://jira.csiro.au/browse/CASDA-832)  The service has a 'run-loop' that polls the RTC for new observations to import, and also attempts to 'progress' the deposit of all un-deposited observations into the archive.
 
 The RTC 'notifies' us of the existence of a new observation to archive by writing a `READY` file to the observation folder. The RTC poller looks for `READY` files within the observation folders and uses the `observation_import` data_deposit command line tool to import the observation metadata file (thereby creating initial corresponding records in the CASDA database).
+If the observation metadata file is invalid in any way an `ERROR` file is written to the observation with any error messages and the observation folder will be ignored until it is manually removed.
 
-Observations logically comprise a set of 'artefacts' (ie: files) that need to be deposited into the archive.  An Observation and its artefacts (collectively known as 'depositables') go through a sequence of states to become deposited.  The actions required to progress a depositable are performed by data_deposit command-line tools, namely:
+Observations logically comprise a set of 'artefacts' (ie: files) that need to be deposited into the archive.  An Observation and its artefacts (collectively known as 'depositables') go through a sequence of states to become deposited.  The major actions required to progress a depositable are performed by data_deposit command-line tools, namely:
 
+* `observation_import` - parse the observation.xml and creates the observation database objects 
 * `fits_import` - extracts image metadata from image cubes
 * `catalogue_import` - extracts catalogue entries from a catalogue file
+* `encapsulate` - tars up a set of small files (e.g. spectra of thumbnails) for storage
 * `stage_artefact` - copies artefacts from the RTC onto a 'staging' area on NGAS ready for the artefact to be 'registered' with NGAS
 * `register_artefact` - takes an artefact in the NGAS 'staging' area and asks NGAS to put it under its management
 * `rtc_notify` - 'notifies' the RTC that the deposit has completed (by writing a DONE file)
+* `data_copy` - creates a reference copy of the user's level 7 image data and database objects for each file. 
+
+These data_deposit command line tools, or jobs, are managed in a queue by QueuedJobManger with a limited number of each type of job allowed to run at a time. 
+A state implementation for a depositable will call QueuedJobManger.startJob() to add the job to the queue. 
+The QueuedJobManger will then monitor how many jobs of that type are running and when space is available will ask the SlurmJobManager to start the job. 
+The QueuedJobManger will then frequently poll the status of running jobs and once they have finished will record the final success or failure.
+A JobStatus is held in memory for each job allowing repeated low-cost queries of the status.  
+
+The deposit of level 7 collections follows largely the same process as observations described above but there are some extra early actions controlled by DAP to prepare the collection for deposit.
+These actions and the processing workflow differ for catalogue collections, where the data is uploaded to DAP, and image collections, where the data must already be at Pawsey. 
+
+
+### Navigating the Deposit Workflow
+
+A frequent question when examining the observation deposit process is 'where is the work done'.
+As noted above, the main deposit work is done by the individual DepositState implementation classes.
+The best places to start looking at these are:
+
+* `CasdaDepositStateFactory` -  Creates the deposit state classes using the type of object and the current state, so it can be used as an index of DepositState implementations.
+* `ParentDepositableArtefactDepositingDepositState` - Progresses each artefact through its states until they are all at the 'Archiving' state waiting to be written to tape.
+* `DepositManagerService` - Runs regularly to advance observations through their states
+* `Level7DepositService`  - Runs regularly to advance level 7 collections through their states
+* `Level7DepositProcessingController` - Provides the web service API used by DAP to control the level 7 collection deposit 
+
 
 
 Setting up

@@ -42,19 +42,6 @@ public class Level7CollectionService
     @Value("${job.manager.recent.age.hours}")
     private int maxAgeOfRecentCompletedJobs;
 
-    
-    /**
-     * Retrieve a list of level 7 collections in the supplied state.
-     * 
-     * @param depositStateType
-     *            of DepositState.Type
-     * @return List of level 7 collections of that Type
-     */
-    public List<Level7Collection> findLevel7CollectionsByDepositStateType(DepositState.Type depositStateType)
-    {
-        return findLevel7CollectionsByDepositStateType(EnumSet.of(depositStateType));
-    }
-
     /**
      * Retrieve a list of level 7 collections in the supplied states.
      * 
@@ -77,5 +64,13 @@ public class Level7CollectionService
         DateTime recentCutoff = DateTime.now(DateTimeZone.UTC).minusHours(maxAgeOfRecentCompletedJobs);
         return level7CollectionRepository.findLevel7CollectionsCompletedSince(recentCutoff);
     }
+
+    /**
+     * @return The list of level 7 collection currently validating or waiting to start validating
+     */
+	public List<Level7Collection> findValidatingLevel7Collections() 
+	{
+		return level7CollectionRepository.findValidatingLevel7Collections();
+	}
 
 }

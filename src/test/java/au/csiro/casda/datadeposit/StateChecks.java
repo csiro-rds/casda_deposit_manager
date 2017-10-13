@@ -35,6 +35,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(true));
         assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -63,6 +65,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(true));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -86,6 +90,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(true));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -109,6 +115,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -132,6 +140,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -155,6 +165,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -178,6 +190,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -201,6 +215,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(true));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -224,6 +240,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(true));
@@ -247,6 +265,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));
@@ -270,6 +290,8 @@ public class StateChecks
         assertThat(depositableArtefact.isNewDeposit(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(depositableArtefact.isProcessing(), is(false));
+        assertThat(depositableArtefact.isEncapsulating(), is(false));
+        assertThat(depositableArtefact.isEncapsulated(), is(false));
         assertThat(depositableArtefact.isProcessed(), is(false));
         assertThat(depositableArtefact.isArchiving(), is(false));
         assertThat(depositableArtefact.isArchived(), is(false));

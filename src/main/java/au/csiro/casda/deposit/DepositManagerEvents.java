@@ -193,7 +193,48 @@ public enum DepositManagerEvents implements CasdaEvent
     /**
      * recovery was successful for an observation's artefact
      */
-    E138;
+    E138,
+
+    /**
+     * Observation failed to be redeposited.
+     */
+    E152,
+
+    /**
+     * Observation redeposit success
+     */
+    E153,
+
+    /**
+     * Failed to refresh observation.
+     */
+    E154,
+
+    /**
+     * Successful refresh of observation
+     */
+    E155,
+
+    /**
+     * Successful bulk refresh of observation metadata
+     */
+    E156,
+
+    /**
+     * Refresh failed
+     */
+    E157,
+
+    /**
+     * Refresh completed
+     */
+    E158,
+
+    /**
+     * Refresh started
+     */
+    E159;
+    
 
     private static Properties eventProperties = new Properties();
 

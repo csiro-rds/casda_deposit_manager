@@ -61,6 +61,60 @@ public interface ObservationRepository extends CrudRepository<Observation, Long>
             @Param("opalCode") String opalCode, @Param("date") DateTime date);
 
     /**
+     * Returns a list of project blocks (opal code, sbid combinations) associated with the given project with spectra
+     * that were released after the given date
+     * 
+     * @param opalCode
+     *            the opal project code
+     * @param date
+     *            the date to match on - note that we are using {@link DateTime} which includes timezone information;
+     *            timezone should be UTC
+     * @return the list of project blocks.
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, s.project.opalCode, "
+            + "o.obsStart, s.project.principalFirstName, s.project.principalLastName) FROM Observation o, "
+            + "Spectrum s WHERE s.releasedDate > :date AND "
+            + "observation_id = o.id AND s.project.opalCode = :opalCode")
+    public List<ObservationProjectDataProductsDTO> findProjectBlocksWithReleasedSpectraAfterDate(
+            @Param("opalCode") String opalCode, @Param("date") DateTime date);
+
+    /**
+     * Returns a list of project blocks (opal code, sbid combinations) associated with the given project with cubelets 
+     * that were released after the given date
+     * 
+     * @param opalCode
+     *            the opal project code
+     * @param date
+     *            the date to match on - note that we are using {@link DateTime} which includes timezone information;
+     *            timezone should be UTC
+     * @return the list of project blocks.
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, cube.project.opalCode, "
+            + "o.obsStart, cube.project.principalFirstName, cube.project.principalLastName) FROM Observation o, "
+            + "Cubelet cube WHERE cube.releasedDate > :date AND "
+            + "observation_id = o.id AND cube.project.opalCode = :opalCode")
+    public List<ObservationProjectDataProductsDTO> findProjectBlocksWithReleasedCubeletsAfterDate(
+            @Param("opalCode") String opalCode, @Param("date") DateTime date);
+    
+    /**
+     * Returns a list of project blocks (opal code, sbid combinations) associated with the given project with moment
+     * maps that were released after the given date
+     * 
+     * @param opalCode
+     *            the opal project code
+     * @param date
+     *            the date to match on - note that we are using {@link DateTime} which includes timezone information;
+     *            timezone should be UTC
+     * @return the list of project blocks.
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, mm.project.opalCode, "
+            + "o.obsStart, mm.project.principalFirstName, mm.project.principalLastName) FROM Observation o, "
+            + "MomentMap mm WHERE mm.releasedDate > :date AND "
+            + "observation_id = o.id AND mm.project.opalCode = :opalCode")
+    public List<ObservationProjectDataProductsDTO> findProjectBlocksWithReleasedMomentMapsAfterDate(
+            @Param("opalCode") String opalCode, @Param("date") DateTime date);
+
+    /**
      * Returns a list of project blocks (opal code, sbid combinations) associated with the given project with
      * measurement sets that were released after the given date
      * 
@@ -118,12 +172,23 @@ public interface ObservationRepository extends CrudRepository<Observation, Long>
     public List<Observation> findObservationsCompletedSince(DateTime recentCutoff);
 
     /**
-     * Gets observations by that are currently being deposited, ie. not in DEPOSITED or FAILED states
+     * Gets observations that failed since the cutoff date.
      * 
+     * @param recentCutoff
+     *            The earliest failed date to be included.
+     * @return a List of observations
+     */
+    @Query("select obs from Observation obs where depositStateType = 'FAILED' AND " + " depositStateChanged >= ?")
+    public List<Observation> findObservationsFailedSince(DateTime recentCutoff);
+
+    /**
+     * Gets observations by that are currently being deposited, ie. not in DEPOSITED or FAILED states
+     * @param typeList the list of deposit states to search for
      * @return A List of observations that are currently depositing.
      */
-    @Query("FROM Observation WHERE deposit_state <> 'DEPOSITED' and deposit_state <> 'FAILED' order by id asc")
-    public List<Observation> findDepositingObservations();
+    @Query("FROM Observation WHERE depositStateType in :typeList order by depositStarted asc")
+    public List<Observation> findDepositingObservationsForDepositStateTypeOrdered
+            (@Param("typeList") EnumSet<DepositState.Type> typeList);
 
     /**
      * Finds the earliest observation start date for a given project code.
@@ -142,9 +207,42 @@ public interface ObservationRepository extends CrudRepository<Observation, Long>
      */
     @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, ic.project.opalCode, "
             + "o.obsStart, ic.project.principalFirstName, ic.project.principalLastName) FROM Observation o, "
-            + "ImageCube ic WHERE ic.releasedDate is null AND observation_id = o.id "
-            + "AND o.depositStateType = 'DEPOSITED'")
+            + "ImageCube ic WHERE ic.releasedDate is null AND ic.qualityLevel = 'NOT_VALIDATED'"
+            + "AND observation_id = o.id AND o.depositStateType = 'DEPOSITED'")
     public List<ObservationProjectDataProductsDTO> findDepositedProjectBlocksWithUnreleasedImageCubes();
+
+    /**
+     * Finds the deposited project blocks with unreleased spectra.
+     * 
+     * @return the list of project blocks (sbid, opal code combinations) with unreleased spectras
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, s.project.opalCode, "
+            + "o.obsStart, s.project.principalFirstName, s.project.principalLastName) FROM Observation o, "
+            + "Spectrum s WHERE s.releasedDate is null AND s.qualityLevel = 'NOT_VALIDATED' "
+            + "AND observation_id = o.id AND o.depositStateType = 'DEPOSITED'")
+    public List<ObservationProjectDataProductsDTO> findDepositedProjectBlocksWithUnreleasedSpectra();
+
+    /**
+     * Finds the deposited project blocks with unreleased moment maps.
+     * 
+     * @return the list of project blocks (sbid, opal code combinations) with unreleased moment maps
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, mm.project.opalCode, "
+            + "o.obsStart, mm.project.principalFirstName, mm.project.principalLastName) FROM Observation o, "
+            + "MomentMap mm WHERE mm.releasedDate is null AND mm.qualityLevel = 'NOT_VALIDATED' "
+            + "AND observation_id = o.id AND o.depositStateType = 'DEPOSITED'")
+    public List<ObservationProjectDataProductsDTO> findDepositedProjectBlocksWithUnreleasedMomentMaps();
+
+    /**
+     * Finds the deposited project blocks with unreleased cubelets.
+     * 
+     * @return the list of project blocks (sbid, opal code combinations) with unreleased cubelets
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, cube.project.opalCode, "
+            + "o.obsStart, cube.project.principalFirstName, cube.project.principalLastName) FROM Observation o, "
+            + "Cubelet cube WHERE cube.releasedDate is null AND cube.qualityLevel = 'NOT_VALIDATED' "
+            + "AND observation_id = o.id AND o.depositStateType = 'DEPOSITED'")
+    public List<ObservationProjectDataProductsDTO> findDepositedProjectBlocksWithUnreleasedCubelets();
 
     /**
      * Finds the deposited project blocks with unreleased catalogues.
@@ -153,8 +251,8 @@ public interface ObservationRepository extends CrudRepository<Observation, Long>
      */
     @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, cat.project.opalCode, "
             + "o.obsStart, cat.project.principalFirstName, cat.project.principalLastName) FROM Observation o, "
-            + "Catalogue cat WHERE cat.releasedDate is null AND observation_id = o.id "
-            + "AND o.depositStateType = 'DEPOSITED'")
+            + "Catalogue cat WHERE cat.releasedDate is null AND cat.qualityLevel = 'NOT_VALIDATED' "
+            + "AND observation_id = o.id AND o.depositStateType = 'DEPOSITED'")
     public List<ObservationProjectDataProductsDTO> findDepositedProjectBlocksWithUnreleasedCatalogues();
 
     /**
@@ -164,8 +262,59 @@ public interface ObservationRepository extends CrudRepository<Observation, Long>
      */
     @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, ms.project.opalCode, "
             + "o.obsStart, ms.project.principalFirstName, ms.project.principalLastName) FROM Observation o, "
-            + "MeasurementSet ms WHERE ms.releasedDate is null AND observation_id = o.id "
-            + "AND o.depositStateType = 'DEPOSITED'")
+            + "MeasurementSet ms WHERE ms.releasedDate is null AND ms.qualityLevel = 'NOT_VALIDATED' "
+            + "AND observation_id = o.id AND o.depositStateType = 'DEPOSITED'")
     public List<ObservationProjectDataProductsDTO> findDepositedProjectBlocksWithUnreleasedMeasurementSets();
 
+    /**
+     * Returns a list of project blocks (opal code, sbid combinations) associated with the supplied observation ids.
+     * 
+     * @param observationIds
+     *            A list of the ids of the observations to be queried.
+     * @return the list of project blocks.
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, ic.project.opalCode, "
+            + "o.obsStart, ic.project.principalFirstName, ic.project.principalLastName) FROM Observation o, "
+            + "ImageCube ic WHERE observation_id = o.id AND o.id IN :obsids")
+    public List<ObservationProjectDataProductsDTO> findProjectBlocksWithImageCubes(
+            @Param("obsids") List<Long> observationIds);
+    
+    /**
+     * Returns a list of project blocks (opal code, sbid combinations) associated with the supplied observation ids.
+     * 
+     * @param observationIds
+     *            A list of the ids of the observations to be queried.
+     * @return the list of project blocks.
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, s.project.opalCode, "
+            + "o.obsStart, s.project.principalFirstName, s.project.principalLastName) FROM Observation o, "
+            + "Spectrum s WHERE observation_id = o.id AND o.id IN :obsids")
+    public List<ObservationProjectDataProductsDTO> findProjectBlocksWithSpectra(
+            @Param("obsids") List<Long> observationIds);
+    
+    /**
+     * Returns a list of project blocks (opal code, sbid combinations) associated with the supplied observation ids.
+     * 
+     * @param observationIds
+     *            A list of the ids of the observations to be queried.
+     * @return the list of project blocks.
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, mm.project.opalCode, "
+            + "o.obsStart, mm.project.principalFirstName, mm.project.principalLastName) FROM Observation o, "
+            + "MomentMap mm WHERE observation_id = o.id AND o.id IN :obsids")
+    public List<ObservationProjectDataProductsDTO> findProjectBlocksWithMomentMaps(
+            @Param("obsids") List<Long> observationIds);
+
+    /**
+     * Returns a list of project blocks (opal code, sbid combinations) associated with the supplied observation ids.
+     * 
+     * @param observationIds
+     *            A list of the ids of the observations to be queried.
+     * @return the list of project blocks.
+     */
+    @Query("SELECT distinct new au.csiro.casda.dto.ObservationProjectDataProductsDTO(o.sbid, cube.project.opalCode, "
+            + "o.obsStart, cube.project.principalFirstName, cube.project.principalLastName) FROM Observation o, "
+            + "Cubelet cube WHERE observation_id = o.id AND o.id IN :obsids")
+    public List<ObservationProjectDataProductsDTO> findProjectBlocksWithCubelets(
+            @Param("obsids") List<Long> observationIds);
 }

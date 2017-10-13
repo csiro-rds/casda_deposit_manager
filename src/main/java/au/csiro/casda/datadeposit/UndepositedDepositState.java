@@ -1,5 +1,6 @@
 package au.csiro.casda.datadeposit;
 
+import au.csiro.casda.entity.observation.EncapsulationFile;
 
 /*
  * #%L
@@ -40,7 +41,24 @@ public class UndepositedDepositState extends DepositState
     @Override
     public void progress()
     {
-        transitionTo(DepositState.Type.PROCESSING);
+    	if((getDepositable() instanceof EncapsulationFile && isEncapsulationFileReadyToProgress()) ||
+    		!(getDepositable() instanceof EncapsulationFile))
+    	{
+    		transitionTo(DepositState.Type.PROCESSING);
+    	}
+        
+    }
+    
+    private boolean isEncapsulationFileReadyToProgress()
+    {
+    	for(ChildDepositableArtefact artefact :((EncapsulationFile)getDepositable()).getAllEncapsulatedArtefacts())
+    	{
+    		if(!artefact.isEncapsulating())
+    		{
+    			return false;
+    		}
+    	}
+    	return true;
     }
 
     /**

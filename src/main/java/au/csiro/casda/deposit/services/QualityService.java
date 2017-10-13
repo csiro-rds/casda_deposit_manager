@@ -16,8 +16,6 @@ package au.csiro.casda.deposit.services;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.transaction.Transactional;
-
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -25,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import au.csiro.casda.deposit.jpa.ObservationProjectQualityFlagRepository;
 import au.csiro.casda.deposit.jpa.QualityFlagRepository;
@@ -80,10 +79,10 @@ public class QualityService
     @Transactional
     public void updateQualityLevelForCatalogueRows(DataProductDTO dataProduct)
     {
-        if (dataProduct.getCatalogueType() != null)
+        if (dataProduct.getSubType() != null)
         {
             String query =
-                    "UPDATE casda." + dataProduct.getCatalogueType().name().toLowerCase()
+                    "UPDATE casda." + dataProduct.getSubType().toLowerCase()
                             + " SET quality_level=?, last_modified=? WHERE catalogue_id=?";
             
             // converting quality level to String and last modified to Date because these are recognised
@@ -93,7 +92,7 @@ public class QualityService
                             .toDate(), dataProduct.getId());
 
             logger.info("Updated quality level for {} catalogue rows in {} for catalogue id {} to {}", response,
-                    dataProduct.getCatalogueType().name().toLowerCase(), dataProduct.getId(),
+                    dataProduct.getSubType().toLowerCase(), dataProduct.getId(),
                     dataProduct.getQualityLevel());
         }
     }

@@ -105,8 +105,8 @@ public class QualityServiceTest
 
         for (int i = 0; i < catalogueTypes.length; i++)
         {
-            DataProductDTO catalogueDataProduct =
-                    new DataProductDTO(12L, DataProductType.CATALOGUE, catalogueTypes[i], "file-id", QualityLevel.GOOD);
+            DataProductDTO catalogueDataProduct = new DataProductDTO(12L,
+            		DataProductType.CATALOGUE, catalogueTypes[i].name(), "file-id", QualityLevel.GOOD);
 
             ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
             when(jdbcTemplate.update(queryCaptor.capture(), eq(QualityLevel.GOOD.name()), any(Date.class), eq(12L)))

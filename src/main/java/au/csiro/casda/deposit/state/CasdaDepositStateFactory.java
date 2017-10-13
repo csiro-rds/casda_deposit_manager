@@ -13,12 +13,20 @@ import au.csiro.casda.Utils;
 import au.csiro.casda.datadeposit.ArchivedDepositState;
 import au.csiro.casda.datadeposit.ChildDepositableArtefact;
 import au.csiro.casda.datadeposit.DepositState;
+import au.csiro.casda.datadeposit.DepositState.Type;
 import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.datadeposit.Depositable;
 import au.csiro.casda.datadeposit.DepositedDepositState;
+import au.csiro.casda.datadeposit.EncapsulatedDepositState;
+import au.csiro.casda.datadeposit.EncapsulatingDepositState;
 import au.csiro.casda.datadeposit.FailedDepositState;
+import au.csiro.casda.datadeposit.IntermediateDepositState;
+import au.csiro.casda.datadeposit.Level7CollectionUnvalidatedDepositState;
+import au.csiro.casda.datadeposit.Level7CollectionValidatingDepositState;
+import au.csiro.casda.datadeposit.ParentDepositableArtefactArchivingDepositState;
 import au.csiro.casda.datadeposit.ParentDepositableArtefactFailedDepositState;
 import au.csiro.casda.datadeposit.ParentDepositableArtefactUndepositedDepositState;
+import au.csiro.casda.datadeposit.MappedDepositState;
 import au.csiro.casda.datadeposit.ProcessedDepositState;
 import au.csiro.casda.datadeposit.ProcessingDepositState;
 import au.csiro.casda.datadeposit.RegisteredDepositState;
@@ -26,10 +34,13 @@ import au.csiro.casda.datadeposit.StagedDepositState;
 import au.csiro.casda.datadeposit.UndepositedDepositState;
 import au.csiro.casda.deposit.CasdaToolProcessJobBuilderFactory;
 import au.csiro.casda.deposit.SingleJobMonitorFactory;
+import au.csiro.casda.deposit.jdbc.SimpleJdbcRepository;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.VoToolsService;
 import au.csiro.casda.entity.observation.Catalogue;
-import au.csiro.casda.entity.observation.ImageCube;
+import au.csiro.casda.entity.observation.EncapsulationFile;
+import au.csiro.casda.entity.observation.EvaluationFile;
+import au.csiro.casda.entity.observation.FitsObject;
 import au.csiro.casda.entity.observation.Level7Collection;
 import au.csiro.casda.entity.observation.Observation;
 import au.csiro.casda.jobmanager.CasdaToolProcessJobBuilder;
@@ -98,6 +109,8 @@ public class CasdaDepositStateFactory implements DepositStateFactory
 
     private String registerCommandArgs;
 
+    private String mapFileCommandAndArgs;
+
     private Map<String, String> ngasArtefactVolumeMap;
 
     private final String archiveStatusCommandAndArgs;
@@ -111,6 +124,10 @@ public class CasdaDepositStateFactory implements DepositStateFactory
     private VoToolsService voToolsService;
 
     private ProcessJobFactory processJobFactory;
+
+    private SimpleJdbcRepository simpleJdbcRepository;
+
+    private String depositToolsWorkingDirectory;
 
     /**
      * Constructor
@@ -127,6 +144,10 @@ public class CasdaDepositStateFactory implements DepositStateFactory
      *            the SingleJobMonitor factory
      * @param voToolsService
      *            the vo tools service
+     * @param simpleJdbcRepository
+     *            the repository for running arbitrary SQL statements
+     * @param depositToolsWorkingDirectory
+     *            the working folder for deposit processing jobs
      * @param depositObservationParentDirectory
      *            the root directory of all deposited observations
      * @param level7CollectionParentDirectory
@@ -144,17 +165,21 @@ public class CasdaDepositStateFactory implements DepositStateFactory
      * @param registerCommandArgs
      *            the copy command args used to register depositable artefacts in the NGAS staging directory with NGAS
      * @param archiveStatusCommandAndArgs
-     *            the command and args to use check an artefact status on the DMF
+     *            the command and args to use to check an artefact status on the DMF
      * @param archivePutCommandAndArgs
      *            the command and args to use to force the DMF to dual state an artefact file.
      * @param marshalledNgasArtefactVolumeMap
      *            a name-value pair list, in Spring EL format, representing a map from DepositableArtefact 'types' to
      *            NGAS volume names (used to control which volume an artefact is copied to and registered on).
+     * @param mapFileCommandAndArgs
+     *            the command and args to use to add an image to the coverage maps.
      */
     @Autowired
     public CasdaDepositStateFactory(NgasService ngasService, JobManager jobManager,
             CasdaToolProcessJobBuilderFactory builderFactory, ProcessJobFactory processJobFactory,
             SingleJobMonitorFactory singleJobMonitorFactory, VoToolsService voToolsService,
+            SimpleJdbcRepository simpleJdbcRepository,
+            @Value("${deposit.tools.working.directory}") String depositToolsWorkingDirectory,
             @Value("${deposit.observation.parent.directory}") String depositObservationParentDirectory,
             @Value("${deposit.level7.collections.dir}") String level7CollectionParentDirectory,
             @Value("${artefact.stage.command}") String stageCommand,
@@ -165,7 +190,8 @@ public class CasdaDepositStateFactory implements DepositStateFactory
             @Value("${artefact.register.command.args}") String registerCommandArgs,
             @Value("${artefact.archive.status.command.and.args}") String archiveStatusCommandAndArgs,
             @Value("${artefact.archive.put.command.and.args}") String archivePutCommandAndArgs,
-            @Value("${ngas.artefact.volume.map}") String marshalledNgasArtefactVolumeMap)
+            @Value("${ngas.artefact.volume.map}") String marshalledNgasArtefactVolumeMap,
+            @Value("${map.file.command.and.args}") String mapFileCommandAndArgs)
     {
         this.ngasService = ngasService;
         this.jobManager = jobManager;
@@ -173,6 +199,8 @@ public class CasdaDepositStateFactory implements DepositStateFactory
         this.processJobFactory = processJobFactory;
         this.singleJobMonitorFactory = singleJobMonitorFactory;
         this.voToolsService = voToolsService;
+        this.simpleJdbcRepository = simpleJdbcRepository;
+        this.depositToolsWorkingDirectory = depositToolsWorkingDirectory;
         this.depositObservationParentDirectory = depositObservationParentDirectory;
         this.level7CollectionParentDirectory = level7CollectionParentDirectory;
         this.stageCommand = stageCommand;
@@ -184,6 +212,7 @@ public class CasdaDepositStateFactory implements DepositStateFactory
         this.archiveStatusCommandAndArgs = archiveStatusCommandAndArgs;
         this.archivePutCommandAndArgs = archivePutCommandAndArgs;
         this.ngasArtefactVolumeMap = Utils.elStringToMap(marshalledNgasArtefactVolumeMap);
+        this.mapFileCommandAndArgs = mapFileCommandAndArgs;
     }
 
     /**
@@ -226,12 +255,16 @@ public class CasdaDepositStateFactory implements DepositStateFactory
         {
         case UNDEPOSITED:
             return new UndepositedDepositState(this, depositable);
-        case PROCESSED:
-            return new ProcessedDepositState(this, depositable);
+        case ENCAPSULATING:
+        	return new EncapsulatingDepositState(this, depositable);
+        case ENCAPSULATED:
+        	return new EncapsulatedDepositState(this, depositable);
         case STAGED:
             return new StagedDepositState(this, depositable);
         case REGISTERED:
-            return new RegisteredDepositState(this, depositable);
+            return new RegisteredDepositState(this, depositable, simpleJdbcRepository);
+        case MAPPED:
+            return new MappedDepositState(this, depositable);
         case ARCHIVED:
             return new ArchivedDepositState(this, depositable);
         case DEPOSITED:
@@ -268,6 +301,11 @@ public class CasdaDepositStateFactory implements DepositStateFactory
                             this.registerCommandArgs),
                     this.jobManager, depositObservationParentDirectory, level7CollectionParentDirectory);
 
+        case MAPPING:
+            return new CasdaMappingDepositState(this, (FitsObject) depositable,
+                    createProcessJobBuilderForProcessJobType(ProcessJobType.SIMPLE, this.mapFileCommandAndArgs, null),
+                    this.jobManager, depositObservationParentDirectory, depositToolsWorkingDirectory);
+            
         case ARCHIVING:
             ProcessJobBuilder archiveStatusBuilder = createProcessJobBuilderForProcessJobType(ProcessJobType.SIMPLE,
                     this.archiveStatusCommandAndArgs, null);
@@ -287,9 +325,16 @@ public class CasdaDepositStateFactory implements DepositStateFactory
             }
 
         case PROCESSING:
-            if (depositable instanceof ImageCube)
+            if (depositable instanceof FitsObject)
             {
-                return new CasdaImageCubeProcessingDepositState(this, (ImageCube) depositable,
+                return new CasdaFitsObjectProcessingDepositState(this, (FitsObject) depositable,
+                        this.depositObservationParentDirectory, this.level7CollectionParentDirectory,
+                        casdaToolBuilderFactory.createBuilder(), this.jobManager);
+            }
+            if (depositable instanceof EvaluationFile && 
+            		((EvaluationFile)depositable).getFormat().equals("validation-metrics"))
+            {
+                return new CasdaValidationMetricProcessingDepositState(this, (EvaluationFile) depositable,
                         this.depositObservationParentDirectory, casdaToolBuilderFactory.createBuilder(),
                         this.jobManager);
             }
@@ -312,10 +357,22 @@ public class CasdaDepositStateFactory implements DepositStateFactory
             {
                 return new CasdaFileProcessingDepositState(this, depositable, this.level7CollectionParentDirectory);
             }
+            else if(depositable instanceof EncapsulationFile)
+            {
+                return new CasdaEncapsulationFileProcessingDepositState(this, (EncapsulationFile) depositable,
+                        this.depositObservationParentDirectory, this.level7CollectionParentDirectory,
+                        casdaToolBuilderFactory.createBuilder(), this.jobManager);
+            }
             else
             {
                 return new ProcessingDepositState(this, depositable);
             }
+        case PROCESSED:
+            if(depositable instanceof EncapsulationFile)
+            {
+                return new CasdaEncapsulationFileProcessedDepositState(this, (EncapsulationFile) depositable);
+            }
+            return new ProcessedDepositState(this, depositable);
 
         default:
             throw new IllegalStateException(String.format("Illegal state type '%s' for depositable '%s'", type,
@@ -341,9 +398,13 @@ public class CasdaDepositStateFactory implements DepositStateFactory
                     this.depositObservationParentDirectory, casdaToolBuilderFactory.createBuilder(), this.jobManager);
 
         case UNDEPOSITED:
-            return new ParentDepositableArtefactUndepositedDepositState(this, depositable);
+            return new ParentDepositableArtefactUndepositedDepositState(this, depositable, Type.PRIORITY_DEPOSITING);
+        case PRIORITY_DEPOSITING:
+            return new ObservationPriorityDepositingDepositState(this, depositable);
         case DEPOSITING:
             return new ObservationDepositingDepositState(this, depositable);
+        case ARCHIVING:
+            return new ParentDepositableArtefactArchivingDepositState(this, depositable, Type.NOTIFYING);
         case DEPOSITED:
             return new DepositedDepositState(this, depositable);
         case FAILED:
@@ -367,10 +428,22 @@ public class CasdaDepositStateFactory implements DepositStateFactory
     {
         switch (type)
         {
+        case UNVALIDATED:
+            return new Level7CollectionUnvalidatedDepositState(this, depositable, this.level7CollectionParentDirectory,
+                    casdaToolBuilderFactory.createBuilder(), this.jobManager);
+        case VALIDATING:
+            return new Level7CollectionValidatingDepositState(this, depositable);
+        case VALID:
+        case INVALID:
+        case PREPARING:
+            return new IntermediateDepositState(type, this, depositable);
+
         case UNDEPOSITED:
-            return new ParentDepositableArtefactUndepositedDepositState(this, depositable);
+            return new ParentDepositableArtefactUndepositedDepositState(this, depositable, Type.DEPOSITING);
         case DEPOSITING:
             return new Level7DepositingDepositState(this, depositable);
+        case ARCHIVING:
+            return new ParentDepositableArtefactArchivingDepositState(this, depositable, Type.CLEANUP);
         case CLEANUP:
             return new Level7CleanUpDepositState(this, (Level7Collection) depositable,
                     this.level7CollectionParentDirectory, this.voToolsService);

@@ -22,6 +22,7 @@ import au.csiro.casda.entity.observation.ParentDepositableArtefact;
  */
 public class ParentDepositableArtefactUndepositedDepositState extends DepositState
 {
+	private Type nextStateType;
     /**
      * Constructor. (see {@link DepositState})
      * 
@@ -29,11 +30,14 @@ public class ParentDepositableArtefactUndepositedDepositState extends DepositSta
      *            (see {@link DepositState})
      * @param parentDepositableArtefact
      *            (see {@link DepositState})
+     * @param nextStateType
+     * 			  the state to transition to after this one. level 7 collections should skip priority depositing
      */
     public ParentDepositableArtefactUndepositedDepositState(DepositStateFactory stateFactory,
-            ParentDepositableArtefact parentDepositableArtefact)
+            ParentDepositableArtefact parentDepositableArtefact, Type nextStateType)
     {
         super(DepositState.Type.UNDEPOSITED, stateFactory, parentDepositableArtefact);
+        this.nextStateType = nextStateType;
     }
 
     /**
@@ -42,7 +46,7 @@ public class ParentDepositableArtefactUndepositedDepositState extends DepositSta
     @Override
     public void progress()
     {
-        transitionTo(DepositState.Type.DEPOSITING);
+        transitionTo(nextStateType);
     }
 
     /**

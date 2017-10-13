@@ -1,14 +1,15 @@
 package au.csiro.casda.entity.observation;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.HashSet;
-import java.util.Set;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -24,6 +25,7 @@ import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.datadeposit.Depositable;
 import au.csiro.casda.deposit.CasdaToolProcessJobBuilderFactory;
 import au.csiro.casda.deposit.SingleJobMonitorFactory;
+import au.csiro.casda.deposit.jdbc.SimpleJdbcRepository;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.VoToolsService;
 import au.csiro.casda.deposit.state.CasdaDepositStateFactory;
@@ -71,15 +73,18 @@ public class ObservationDepositingTest
     @Mock
     private VoToolsService voToolsService;
 
+    @Mock
+    private SimpleJdbcRepository simpleJdbcRepository;
+
     @Before
     public void setup()
     {
         MockitoAnnotations.initMocks(this);
-        this.depositStateFactory =
-                new CasdaDepositStateFactory(ngasService, jobManager, factory, new JavaProcessJobFactory(),
-                        new SingleJobMonitorFactory(), voToolsService, "observation", "level7", "{\"stageCommand\"}",
-                        "SIMPLE", "stageCommandAndArgs", "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs",
-                        "archiveStatus", "archivePut", " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }");
+        this.depositStateFactory = new CasdaDepositStateFactory(ngasService, jobManager, factory,
+                new JavaProcessJobFactory(), new SingleJobMonitorFactory(), voToolsService, simpleJdbcRepository, "",
+                "observation", "level7", "{\"stageCommand\"}", "SIMPLE", "stageCommandAndArgs", "{\"registerCommand\"}",
+                "SIMPLE", "registerCommandAndArgs", "archiveStatus", "archivePut",
+                " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }", "");
         when(factory.createBuilder()).thenReturn(processBuilder);
         when(processBuilder.setCommand(any(String.class))).thenReturn(processBuilder);
         when(processBuilder.addCommandArgument(any(String.class), any(String.class))).thenReturn(processBuilder);
@@ -92,7 +97,7 @@ public class ObservationDepositingTest
     {
         Observation observation = new Observation();
 
-        Set<ChildDepositableArtefact> expectedDepositables = new HashSet<>();
+        List<ChildDepositableArtefact> expectedDepositables = new ArrayList<>();
         expectedDepositables.add(observation.getObservationMetadataFileDepositable());
         assertThat(observation.getDepositableArtefacts(), equalTo(expectedDepositables));
     }
@@ -101,7 +106,7 @@ public class ObservationDepositingTest
     public void observationDepositablesIncludesImageCubes()
     {
         Observation observation = new Observation();
-        Set<ChildDepositableArtefact> expectedDepositables = new HashSet<>();
+        List<ChildDepositableArtefact> expectedDepositables = new ArrayList<>();
         expectedDepositables.add(observation.getObservationMetadataFileDepositable());
 
         assertThat(observation.getDepositableArtefacts(), equalTo(expectedDepositables));
@@ -121,7 +126,7 @@ public class ObservationDepositingTest
     public void observationDepositablesIncludesCatalogues()
     {
         Observation observation = new Observation();
-        Set<ChildDepositableArtefact> expectedDepositables = new HashSet<>();
+        List<ChildDepositableArtefact> expectedDepositables = new ArrayList<>();
         expectedDepositables.add(observation.getObservationMetadataFileDepositable());
 
         assertThat(observation.getDepositableArtefacts(), equalTo(expectedDepositables));
@@ -141,7 +146,7 @@ public class ObservationDepositingTest
     public void observationDepositablesIncludesMeasurementSets()
     {
         Observation observation = new Observation();
-        Set<ChildDepositableArtefact> expectedDepositables = new HashSet<>();
+        List<ChildDepositableArtefact> expectedDepositables = new ArrayList<>();
         expectedDepositables.add(observation.getObservationMetadataFileDepositable());
 
         assertThat(observation.getDepositableArtefacts(), equalTo(expectedDepositables));
@@ -161,7 +166,7 @@ public class ObservationDepositingTest
     public void observationDepositablesIncludesEvaluationFiles()
     {
         Observation observation = new Observation();
-        Set<ChildDepositableArtefact> expectedDepositables = new HashSet<>();
+        List<ChildDepositableArtefact> expectedDepositables = new ArrayList<>();
         expectedDepositables.add(observation.getObservationMetadataFileDepositable());
 
         assertThat(observation.getDepositableArtefacts(), equalTo(expectedDepositables));
@@ -183,6 +188,7 @@ public class ObservationDepositingTest
         Observation observation = new Observation();
         assertThat(observation.isNewDeposit(), is(true));
         assertThat(observation.isDepositing(), is(false));
+        assertThat(observation.isPriorityDepositing(), is(false));
         assertThat(observation.isNotifying(), is(false));
         assertThat(observation.isDeposited(), is(false));
         assertThat(observation.isFailedDeposit(), is(false));
@@ -204,6 +210,7 @@ public class ObservationDepositingTest
         for (Depositable depositable : observation.getDepositableArtefacts())
         {
             assertThat(depositable.isNewDeposit(), is(true));
+            assertThat(observation.isPriorityDepositing(), is(false));
             assertThat(depositable.isDepositing(), is(false));
             assertThat(observation.isNotifying(), is(false));
             assertThat(depositable.isDeposited(), is(false));
@@ -218,6 +225,7 @@ public class ObservationDepositingTest
 
         observation.progressDeposit();
         assertThat(observation.isNewDeposit(), is(true));
+        assertThat(observation.isPriorityDepositing(), is(false));
         assertThat(observation.isDepositing(), is(false));
         assertThat(observation.isNotifying(), is(false));
         assertThat(observation.isDeposited(), is(false));
@@ -225,13 +233,14 @@ public class ObservationDepositingTest
     }
 
     @Test
-    public void progressDepositFromUndepositedTransitionsToDepositing()
+    public void progressDepositFromUndepositedTransitionsToPriorityDepositing()
     {
         Observation observation = createObservationInState(DepositState.Type.UNDEPOSITED);
 
         observation.progressDeposit();
         assertThat(observation.isNewDeposit(), is(false));
-        assertThat(observation.isDepositing(), is(true));
+        assertThat(observation.isPriorityDepositing(), is(true));
+        assertThat(observation.isDepositing(), is(false));
         assertThat(observation.isNotifying(), is(false));
         assertThat(observation.isDeposited(), is(false));
         assertThat(observation.isFailedDeposit(), is(false));
@@ -251,6 +260,7 @@ public class ObservationDepositingTest
 
         observation.progressDeposit();
         assertThat(observation.isNewDeposit(), is(false));
+        assertThat(observation.isPriorityDepositing(), is(false));
         assertThat(observation.isDepositing(), is(true));
         assertThat(observation.isNotifying(), is(false));
         assertThat(observation.isDeposited(), is(false));
@@ -280,8 +290,10 @@ public class ObservationDepositingTest
         observation.progressDeposit();
 
         assertThat(observation.isNewDeposit(), is(false));
+        assertThat(observation.isPriorityDepositing(), is(false));
         assertThat(observation.isDepositing(), is(false));
-        assertThat(observation.isNotifying(), is(true));
+        assertThat(observation.isAtleastArchiving(), is(true));
+        assertThat(observation.isNotifying(), is(false));
         assertThat(observation.isDeposited(), is(false));
         assertThat(observation.isFailedDeposit(), is(false));
         for (Depositable depositable : observation.getDepositableArtefacts())
@@ -292,9 +304,95 @@ public class ObservationDepositingTest
             assertThat(depositable.isFailedDeposit(), is(false));
         }
     }
+    
+    @Test
+    public void progressDepositWhenAllLargeFilesAreStagingTransitionsToDepositing()
+    {
+        Observation observation = createObservationInState(DepositState.Type.PRIORITY_DEPOSITING);
+
+        observation.setDepositState(
+                observation.getDepositStateFactory().createState(DepositState.Type.PRIORITY_DEPOSITING, observation));
+        for (Depositable depositable : observation.getDepositableArtefacts())
+        {
+        	if(depositable instanceof ImageCube)
+        	{
+                depositable.setDepositState(
+                        observation.getDepositStateFactory().createState(DepositState.Type.STAGING, depositable));
+        	}
+        }
+
+        observation.progressDeposit();
+
+        assertThat(observation.isNewDeposit(), is(false));
+        assertThat(observation.isPriorityDepositing(), is(false));
+        assertThat(observation.isDepositing(), is(true));
+        assertThat(observation.isNotifying(), is(false));
+        assertThat(observation.isDeposited(), is(false));
+        assertThat(observation.isFailedDeposit(), is(false));
+        for (Depositable depositable : observation.getDepositableArtefacts())
+        {
+        	if(depositable instanceof ImageCube)
+        	{
+        		//image cubes have progressed
+                assertThat(depositable.isAtleastStaging(), is(true));
+        	}
+        	else
+        	{
+        		//but other types have not
+                assertThat(depositable.isNewDeposit(), is(true));
+                assertThat(depositable.isDepositing(), is(false));
+                assertThat(depositable.isDeposited(), is(false));
+                assertThat(depositable.isFailedDeposit(), is(false));
+        	}
+
+        }
+    }
+    
+    @Test
+    public void dontProgressDepositWhenAllLargeFilesAreNotStagingDoesntTransition()
+    {
+        Observation observation = createObservationInState(DepositState.Type.PRIORITY_DEPOSITING);
+
+        observation.setDepositState(
+                observation.getDepositStateFactory().createState(DepositState.Type.PRIORITY_DEPOSITING, observation));
+        for (Depositable depositable : observation.getDepositableArtefacts())
+        {
+        	if(depositable instanceof ImageCube)
+        	{
+                depositable.setDepositState(
+                        observation.getDepositStateFactory().createState(DepositState.Type.PROCESSED, depositable));
+        	}
+        }
+
+        observation.progressDeposit();
+
+        assertThat(observation.isNewDeposit(), is(false));
+        assertThat(observation.isPriorityDepositing(), is(true));
+        assertThat(observation.isDepositing(), is(false));
+        assertThat(observation.isNotifying(), is(false));
+        assertThat(observation.isDeposited(), is(false));
+        assertThat(observation.isFailedDeposit(), is(false));
+        for (Depositable depositable : observation.getDepositableArtefacts())
+        {
+        	if(depositable instanceof ImageCube)
+        	{
+        		//image cubes have progressed
+                assertThat(((ImageCube) depositable).isStaging(), is(true));
+        	}
+        	else
+        	{
+        		//but other types have not
+                assertThat(depositable.isNewDeposit(), is(true));
+                assertThat(depositable.isDepositing(), is(false));
+                assertThat(depositable.isDeposited(), is(false));
+                assertThat(depositable.isFailedDeposit(), is(false));
+        	}
+
+        }
+    }
 
     @Test
-    public void progressDepositWhenAnyDepositableIsFailedTransitionsToFailed()
+    public void progressDepositWhenAnyDepositableIsFailedInDepositingTransitionsToFailed()
     {
         Observation observation = createObservationInState(DepositState.Type.DEPOSITING);
 
@@ -321,6 +419,7 @@ public class ObservationDepositingTest
             observation.progressDeposit();
 
             assertThat(observation.isNewDeposit(), is(false));
+            assertThat(observation.isPriorityDepositing(), is(false));
             assertThat(observation.isDepositing(), is(false));
             assertThat(observation.isNotifying(), is(false));
             assertThat(observation.isDeposited(), is(false));
@@ -339,6 +438,53 @@ public class ObservationDepositingTest
                     assertThat(depositable.isDeposited(), is(true));
                     assertThat(depositable.isFailedDeposit(), is(false));
                 }
+            }
+        }
+    }
+    
+    @Test
+    public void progressDepositWhenAnyDepositableIsFailedInPriorityDepositingTransitionsToFailed()
+    {
+        Observation observation = createObservationInState(DepositState.Type.PRIORITY_DEPOSITING);
+
+        observation.setDepositState(
+                observation.getDepositStateFactory().createState(DepositState.Type.PRIORITY_DEPOSITING, observation));
+        for (Depositable depositable : observation.getDepositableArtefacts())
+        {
+        	//set image cube to fail (there is only one)
+            if (depositable instanceof ImageCube)
+            {
+                depositable.setDepositState(
+                        observation.getDepositStateFactory().createState(DepositState.Type.FAILED, depositable));
+            }
+            else
+            {
+                depositable.setDepositState(
+                        observation.getDepositStateFactory().createState(DepositState.Type.DEPOSITED, depositable));
+            }
+        }
+
+        observation.progressDeposit();
+
+        assertThat(observation.isNewDeposit(), is(false));
+        assertThat(observation.isPriorityDepositing(), is(false));
+        assertThat(observation.isDepositing(), is(false));
+        assertThat(observation.isNotifying(), is(false));
+        assertThat(observation.isDeposited(), is(false));
+        assertThat(observation.isFailedDeposit(), is(true));
+        for (Depositable depositable : observation.getDepositableArtefacts())
+        {
+            assertThat(depositable.isNewDeposit(), is(false));
+            assertThat(depositable.isDepositing(), is(false));
+            if (depositable instanceof ImageCube)
+            {
+                assertThat(depositable.isDeposited(), is(false));
+                assertThat(depositable.isFailedDeposit(), is(true));
+            }
+            else
+            {
+                assertThat(depositable.isDeposited(), is(true));
+                assertThat(depositable.isFailedDeposit(), is(false));
             }
         }
     }
@@ -361,6 +507,7 @@ public class ObservationDepositingTest
         observation.progressDeposit();
 
         assertThat(observation.isNewDeposit(), is(false));
+        assertThat(observation.isPriorityDepositing(), is(false));
         assertThat(observation.isDepositing(), is(false));
         assertThat(observation.isNotifying(), is(false));
         assertThat(observation.isDeposited(), is(true));
@@ -410,7 +557,8 @@ public class ObservationDepositingTest
         measurementSet.setFilename("measurementset.xml");
         observation.addMeasurementSet(measurementSet);
         EvaluationFile evaluationFile = new EvaluationFile();
-        evaluationFile.setFilename("evaluation.xml");
+        evaluationFile.setFilename("evaluation.pdf");
+        evaluationFile.setFormat("pdf");
         observation.addEvaluationFile(evaluationFile);
         observation.setDepositStateFactory(depositStateFactory);
         observation.setDepositState(depositStateFactory.createState(depositState, observation));

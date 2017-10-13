@@ -27,6 +27,21 @@ public enum DepositStateDTO
     BUILDING_DEPOSIT,
 
     /**
+     * The deposit status used when a ParentDepositableArtefact is being validated.
+     */
+    VALIDATING,
+
+    /**
+     * The deposit status used when a ParentDepositableArtefact has passed validation.
+     */
+    VALID,
+    
+    /**
+     * The deposit status used when a ParentDepositableArtefact has failed validation.
+     */
+    INVALID,
+
+    /**
      * The deposit status used when a Depositable is being deposited.
      */
     DEPOSITING,
@@ -55,6 +70,22 @@ public enum DepositStateDTO
         else if (depositable.isDeposited())
         {
             return DEPOSITED;
+        }
+        else if (depositable.isPreparing())
+        {
+            return BUILDING_DEPOSIT;
+        }
+        else if (depositable.isValidating())
+        {
+            return VALIDATING;
+        }
+        else if (depositable.isValid())
+        {
+            return VALID;
+        }
+        else if (depositable.isInvalid())
+        {
+            return INVALID;
         }
         else
         {

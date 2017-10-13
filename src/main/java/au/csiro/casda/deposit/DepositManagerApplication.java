@@ -47,11 +47,11 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import au.csiro.casda.Utils;
+import au.csiro.casda.deposit.jobqueue.QueuedJobManager;
 import au.csiro.casda.jobmanager.AsynchronousJobManager;
 import au.csiro.casda.jobmanager.CommandRunnerServiceProcessJobFactory;
 import au.csiro.casda.jobmanager.JavaProcessJobFactory;
 import au.csiro.casda.jobmanager.JobManager;
-import au.csiro.casda.jobmanager.JobManagerThrottle;
 import au.csiro.casda.jobmanager.ProcessJobBuilder.ProcessJobFactory;
 import au.csiro.casda.jobmanager.SlurmJobManager;
 import au.csiro.casda.jobmanager.SynchronousProcessJobManager;
@@ -179,6 +179,8 @@ public class DepositManagerApplication extends SpringBootServletInitializer
      *            the command and args used to find out a job's status
      * @param startJobCommandAndArgsPrologue
      *            the command and args used to start a job
+     * @param cancelJobCommandAndArgs
+     *            the command and args used to cancel a job
      * @return A new SlurmJobManager instance.
      */
     @Bean
@@ -186,10 +188,11 @@ public class DepositManagerApplication extends SpringBootServletInitializer
             @Value("${slurm.job.status.separator}") String slurmJobStatusSeparator,
             @Value("${slurm.jobs.running.count.command}") String runningJobsCountCommandAndArgs,
             @Value("${slurm.job.status.command}") String jobStatusCommandAndArgs,
-            @Value("${slurm.job.start.command.prologue}") String startJobCommandAndArgsPrologue)
+            @Value("${slurm.job.start.command.prologue}") String startJobCommandAndArgsPrologue,
+            @Value("${slurm.job.cancel.command}") String cancelJobCommandAndArgs)
     {
         return new SlurmJobManager(processJobFactory, slurmJobStatusSeparator, runningJobsCountCommandAndArgs,
-                jobStatusCommandAndArgs, startJobCommandAndArgsPrologue);
+                jobStatusCommandAndArgs, startJobCommandAndArgsPrologue, cancelJobCommandAndArgs);
     }
 
     /**
@@ -210,7 +213,7 @@ public class DepositManagerApplication extends SpringBootServletInitializer
     @Scope(ConfigurableBeanFactory.SCOPE_SINGLETON)
     public JobManager jobManager()
     {
-        return new JobManagerThrottle(getUnthrottledJobManager(), this.jobManagerThrottlingMap);
+        return new QueuedJobManager(getUnthrottledJobManager(), this.jobManagerThrottlingMap);
     }
 
     /**

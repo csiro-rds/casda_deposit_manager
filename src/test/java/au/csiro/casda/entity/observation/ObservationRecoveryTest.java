@@ -20,6 +20,7 @@ import au.csiro.casda.datadeposit.DepositState.Type;
 import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.deposit.CasdaToolProcessJobBuilderFactory;
 import au.csiro.casda.deposit.SingleJobMonitorFactory;
+import au.csiro.casda.deposit.jdbc.SimpleJdbcRepository;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.VoToolsService;
 import au.csiro.casda.deposit.state.CasdaDepositStateFactory;
@@ -75,6 +76,9 @@ public class ObservationRecoveryTest
     @Mock
     private VoToolsService voToolsService;
 
+    @Mock
+    private SimpleJdbcRepository simpleJdbcRepository;
+
     @Before
     public void setup() throws Exception
     {
@@ -83,12 +87,12 @@ public class ObservationRecoveryTest
         observationParentDir = tempFolder.newFolder("observation");
         level7ParentDir = tempFolder.newFolder("level7");
 
-        this.depositStateFactory =
-                new CasdaDepositStateFactory(ngasService, jobManager, factory, new JavaProcessJobFactory(),
-                        new SingleJobMonitorFactory(), voToolsService, observationParentDir.getAbsolutePath(),
-                        level7ParentDir.getAbsolutePath(), "{\"stageCommand\"}", "SIMPLE", "stageCommandAndArgs",
-                        "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs", "{\"archiveStatus\"}",
-                        "{\"archivePut\"}", " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }");
+        this.depositStateFactory = new CasdaDepositStateFactory(ngasService, jobManager, factory,
+                new JavaProcessJobFactory(), new SingleJobMonitorFactory(), voToolsService, simpleJdbcRepository, "",
+                observationParentDir.getAbsolutePath(), level7ParentDir.getAbsolutePath(), "{\"stageCommand\"}",
+                "SIMPLE", "stageCommandAndArgs", "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs",
+                "{\"archiveStatus\"}", "{\"archivePut\"}",
+                " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }", "");
         when(factory.createBuilder()).thenReturn(processBuilder);
         when(processBuilder.setCommand(any(String.class))).thenReturn(processBuilder);
         when(processBuilder.addCommandArgument(any(String.class), any(String.class))).thenReturn(processBuilder);
@@ -121,7 +125,7 @@ public class ObservationRecoveryTest
     public void testRecoverFromNotifyingStateWhereItFails()
     {
         // Can't do from DEPOSITING state and transition to NOTIFYING similar to other tests as observations will only
-        // progress like that when their artifacts do but in this test we don't have such control over them. Other tests
+        // progress like that when their artefacts do but in this test we don't have such control over them. Other tests
         // (eg. ObservationDepositingRecoveryTest) do that.
         CasdaDepositableEntity observation = createDepositableArtefactInState(DepositState.Type.NOTIFYING);
         ObservationStateChecks.checkStateIsNotifying(observation);
@@ -151,13 +155,13 @@ public class ObservationRecoveryTest
         CasdaDepositableEntity observation = createDepositableArtefactInState(type);
         ObservationStateChecks.checkStateIsInitial(observation);
         observation.progressDeposit();
-        ObservationStateChecks.checkStateIsDepositing(observation);
+        ObservationStateChecks.checkStateIsPriorityDepositing(observation);
         // Simulate failure
         observation.setDepositState(depositStateFactory.createState(DepositState.Type.FAILED, observation));
 
         ObservationStateChecks.checkStateIsFailed(observation);
         observation.recoverDeposit();
-        ObservationStateChecks.checkStateIsDepositing(observation);
+        ObservationStateChecks.checkStateIsPriorityDepositing(observation);
     }
 
     @Test

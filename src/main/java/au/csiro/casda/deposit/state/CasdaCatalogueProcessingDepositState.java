@@ -7,6 +7,8 @@ import au.csiro.casda.datadeposit.DepositState;
 import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.datadeposit.ProcessingDepositState;
 import au.csiro.casda.entity.observation.Catalogue;
+import au.csiro.casda.entity.observation.CatalogueType;
+import au.csiro.casda.entity.observation.Level7Collection;
 import au.csiro.casda.jobmanager.CasdaToolProcessJobBuilder;
 import au.csiro.casda.jobmanager.JobManager;
 
@@ -77,25 +79,33 @@ public class CasdaCatalogueProcessingDepositState extends ProcessingDepositState
     @Override
     public void progress()
     {
-        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId());
+        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId(CATALOGUE_IMPORTER_TOOL_NAME));
         if (jobStatus == null)
         {
-            jobManager.startJob(processBuilder.setCommand(CATALOGUE_IMPORTER_TOOL_NAME)
-                    .addCommandArgument("-catalogue-type", getDepositable().getCatalogueType().getName())
+            Catalogue catalogue = getDepositable();
+            CasdaToolProcessJobBuilder jobBuilder = processBuilder.setCommand(CATALOGUE_IMPORTER_TOOL_NAME)
+                    .addCommandArgument("-catalogue-type", catalogue.getCatalogueType().getName())
                     .addCommandArgument("-parent-id", getParentId())
-                    .addCommandArgument("-catalogue-filename", getDepositable().getFilename())
-                    .addCommandArgument("-infile", getInfilePath().toString())
-                    .createJob(getJobId(), CATALOGUE_IMPORTER_TOOL_NAME));
+                    .addCommandArgument("-catalogue-filename", catalogue.getFilename())
+                    .addCommandArgument("-infile", getInfilePath().toString());
+            if (catalogue.getCatalogueType() == CatalogueType.DERIVED_CATALOGUE)
+            {
+                Level7Collection parent = (Level7Collection) catalogue.getParent();
+                jobBuilder.addCommandArgument("-dc-common-id", String.valueOf(parent.getDcCommonId()));
+            }
+            jobManager.startJob(jobBuilder.createJob
+            		(getJobId(CATALOGUE_IMPORTER_TOOL_NAME), CATALOGUE_IMPORTER_TOOL_NAME));
         }
         else if (jobStatus.isFailed())
         {
-            logger.error("Job {} failed while processing catalogue deposit state with output :{}", getJobId(),
-                    jobStatus.getJobOutput());
+            logger.error("Job {} failed while processing catalogue deposit state with output :{}", 
+            		getJobId(CATALOGUE_IMPORTER_TOOL_NAME), jobStatus.getJobOutput());
             transitionTo(DepositState.Type.FAILED);
         }
         else if (jobStatus.isFinished())
         {
-            super.progress();
+            // Do nothing as the catalogue_import job will have advanced the catalogue to the next state
+            return;
         } // else still running
     }
 
@@ -106,12 +116,6 @@ public class CasdaCatalogueProcessingDepositState extends ProcessingDepositState
     public Catalogue getDepositable()
     {
         return (Catalogue) super.getDepositable();
-    }
-
-    private String getJobId()
-    {
-        return String.format("%s-%s-%d", CATALOGUE_IMPORTER_TOOL_NAME, getDepositable().getUniqueIdentifier(),
-                getDepositable().getDepositFailureCount());
     }
 
     private String getParentId()

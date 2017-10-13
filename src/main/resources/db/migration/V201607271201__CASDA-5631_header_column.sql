@@ -1,0 +1,1 @@
+alter table casda.image_cube add header text;

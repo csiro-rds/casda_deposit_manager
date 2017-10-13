@@ -1,5 +1,7 @@
 package au.csiro.casda.deposit.manager;
 
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 
 import org.joda.time.DateTime;
@@ -10,9 +12,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import au.csiro.casda.datadeposit.DepositState;
+import au.csiro.casda.datadeposit.DepositState.Type;
 import au.csiro.casda.datadeposit.DepositableArtefact;
 import au.csiro.casda.deposit.DepositManagerEvents;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
+import au.csiro.casda.entity.CasdaDepositableEntity;
 import au.csiro.casda.entity.observation.Observation;
 
 /*
@@ -72,21 +77,35 @@ public class CasdaDepositStatusProgressMonitor
     @Transactional
     public void checkDepositableStatuses(long atTimeMillis)
     {
-        List<Observation> observations = observationRepository.findDepositingObservations();
+        EnumSet<DepositState.Type> typeList = EnumSet.allOf((DepositState.Type.class));
+        typeList.removeAll
+                (Arrays.asList(DepositState.Type.DEPOSITED, DepositState.Type.FAILED));
+        List<Observation> observations = 
+                observationRepository.findDepositingObservationsForDepositStateTypeOrdered(typeList);
 
         for (Observation observation : observations)
         {
-            // check if the observation has taken too long to complete
-            if (atTimeMillis - observation.getDepositStarted().getMillis() > observationTimeout)
+            // check if the observation has taken too long to complete. if redeposit started time is empty checks against
+        	// deposit start time, if not null will check against redeposit start time
+            if (atTimeMillis - (observation.getRedepositStarted() == null ? observation.getDepositStarted().getMillis() 
+            		: observation.getRedepositStarted().getMillis()) > observationTimeout)
             {
                 logger.error(DepositManagerEvents.E076.messageBuilder().add(observation.getSbid()).toString());
             }
 
-            // check if every artifact has taken too long to progress
+            // check if every artifact has taken too long to progress (ignoring those being archived or fully deposited)
             for (DepositableArtefact artifact : observation.getDepositableArtefacts())
             {
                 DateTime depositStateChanged = artifact.getDepositStateChanged();
-                if (depositStateChanged != null && atTimeMillis - depositStateChanged.getMillis() > artifactTimeout)
+                DepositState.Type depositStateType = null;
+                if (artifact instanceof CasdaDepositableEntity)
+                {
+                    depositStateType = ((CasdaDepositableEntity) artifact).getDepositStateType();
+                }
+
+                if (depositStateChanged != null && depositStateType != Type.DEPOSITED
+                        && depositStateType != Type.ARCHIVING
+                        && atTimeMillis - depositStateChanged.getMillis() > artifactTimeout)
                 {
                     logger.error(DepositManagerEvents.E074.messageBuilder().add(artifact.getFilename())
                             .add(observation.getSbid()).toString());

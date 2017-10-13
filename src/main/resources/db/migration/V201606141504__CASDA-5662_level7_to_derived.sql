@@ -1,0 +1,1 @@
+update casda.catalogue set catalogue_type = 'DERIVED_CATALOGUE' where catalogue_type = 'LEVEL7';

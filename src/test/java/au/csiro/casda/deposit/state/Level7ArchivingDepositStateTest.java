@@ -52,7 +52,7 @@ public class Level7ArchivingDepositStateTest extends BaseArchivingDepositStateTe
         volMap.put("image_cube", "vol_A");
         Level7Collection level7Collection = new Level7Collection(121212);
         level7Collection.setProject(new Project("ABC123"));
-        Catalogue catalogue = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue catalogue = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         catalogue.setFilename("bob.xml");
         level7Collection.addCatalogue(catalogue);
         catalogue.setDepositState(new ArchivingDepositState(stateFactory, level7Collection));

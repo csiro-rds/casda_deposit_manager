@@ -47,7 +47,8 @@ public interface Level7CollectionRepository extends CrudRepository<Level7Collect
      * 
      * @return A List of level 7 collections that are currently depositing.
      */
-    @Query("FROM Level7Collection WHERE deposit_state <> 'DEPOSITED' and deposit_state <> 'FAILED' order by id asc")
+    @Query("FROM Level7Collection WHERE deposit_state NOT IN "
+            + "('DEPOSITED', 'FAILED', 'PREPARING', 'INVALID', 'VALID') order by id asc")
     public List<Level7Collection> findDepositingLevel7Collections();
     
     /**
@@ -70,4 +71,10 @@ public interface Level7CollectionRepository extends CrudRepository<Level7Collect
      */
     @Query("select lsev from Level7Collection lsev where depositStateType = 'DEPOSITED' AND " + " depositStateChanged >= ?")
     public List<Level7Collection> findLevel7CollectionsCompletedSince(DateTime recentCutoff);
+    
+    /**
+     * @return The list of level 7 collection currently validating or waiting to start validating
+     */
+    @Query("FROM Level7Collection WHERE deposit_state IN ('VALIDATING', 'UNVALIDATED', 'VALID') order by id asc")
+    public List<Level7Collection> findValidatingLevel7Collections();
 }

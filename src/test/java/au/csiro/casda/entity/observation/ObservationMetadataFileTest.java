@@ -64,4 +64,10 @@ public class ObservationMetadataFileTest extends AbstractDepositableArtefactTest
         return new ObservationMetadataFile(new Observation(1234));
     }
 
+	@Override
+	protected EncapsulationFile createEncapsulationFile()
+	{
+		return null;
+	}
+
 }

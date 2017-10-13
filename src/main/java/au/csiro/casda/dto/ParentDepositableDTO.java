@@ -6,9 +6,12 @@ import java.io.Serializable;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import au.csiro.casda.datadeposit.DepositableArtefact;
 import au.csiro.casda.entity.observation.Catalogue;
@@ -16,8 +19,6 @@ import au.csiro.casda.entity.observation.CatalogueType;
 import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.Level7Collection;
 import au.csiro.casda.entity.observation.MeasurementSet;
-
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /*
  * #%L
@@ -41,6 +42,11 @@ public class ParentDepositableDTO extends DepositableDTO implements Serializable
     private static final long serialVersionUID = -4973658371572565617L;
 
     private DepositableArtefactDTO[] depositableArtefacts;
+    private String imageCubePath;
+    private String spectrumPath;
+    private String momentMapPath;
+    private String cubeletPath;
+    private List<String> errors;
 
     /**
      * Empty constructor, for JSON deserialisation
@@ -118,6 +124,11 @@ public class ParentDepositableDTO extends DepositableDTO implements Serializable
                 }
             }
             this.setDepositState(DepositStateDTO.valueForDepositable(level7Collection));
+            imageCubePath = level7Collection.getImageCubePath();
+            spectrumPath = level7Collection.getSpectrumPath();
+            momentMapPath = level7Collection.getMomentMapPath();
+            setCubeletPath(level7Collection.getCubeletPath());
+            errors = level7Collection.getErrors();
         }
         this.depositableArtefacts =
                 new ArrayList<DepositableArtefactDTO>(depositableArtefacts.values())
@@ -166,7 +177,7 @@ public class ParentDepositableDTO extends DepositableDTO implements Serializable
 
     private String getLevel7CatalogueDescription()
     {
-        return new Catalogue(CatalogueType.LEVEL7).getDepositableArtefactTypeDescription();
+        return new Catalogue(CatalogueType.DERIVED_CATALOGUE).getDepositableArtefactTypeDescription();
     }
 
     private Long getFilesizeForDepositableArtefact(DepositableArtefact depositableArtefact)
@@ -190,4 +201,53 @@ public class ParentDepositableDTO extends DepositableDTO implements Serializable
         }
     }
 
+    public String getImageCubePath()
+    {
+        return imageCubePath;
+    }
+
+    public void setImageCubePath(String imageCubePath)
+    {
+        this.imageCubePath = imageCubePath;
+    }
+
+    public String getSpectrumPath()
+    {
+        return spectrumPath;
+    }
+
+    public void setSpectrumPath(String spectrumPath)
+    {
+        this.spectrumPath = spectrumPath;
+    }
+
+    public String getMomentMapPath()
+    {
+        return momentMapPath;
+    }
+
+    public void setMomentMapPath(String momentMapPath)
+    {
+        this.momentMapPath = momentMapPath;
+    }
+
+	public String getCubeletPath()
+	{
+		return cubeletPath;
+	}
+
+	public void setCubeletPath(String cubeletPath)
+	{
+		this.cubeletPath = cubeletPath;
+	}
+
+	public List<String> getErrors()
+	{
+		return errors;
+	}
+
+	public void setErrors(List<String> errors) 
+	{
+		this.errors = errors;
+	}
 }

@@ -1,18 +1,17 @@
 package au.csiro.casda.deposit.manager;
 
-import javax.transaction.Transactional;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import au.csiro.casda.datadeposit.DepositStateChangeListener;
 import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
 import au.csiro.casda.entity.observation.Observation;
-import au.csiro.casda.jobmanager.JobManager;
 
 /*
  * #%L
@@ -40,9 +39,6 @@ public class ObservationDepositProgressor
     private ObservationRepository observationRepository;
 
     @Autowired
-    private JobManager jobManager;
-
-    @Autowired
     private DepositStateFactory depositStateFactory;
 
     @Autowired
@@ -55,7 +51,7 @@ public class ObservationDepositProgressor
      * @param sbid
      *            the scheduling block ID of the observation
      */
-    @Transactional(value = Transactional.TxType.REQUIRED, rollbackOn = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void progressObservation(Integer sbid)
     {
         Observation observation = observationRepository.findBySbid(sbid);

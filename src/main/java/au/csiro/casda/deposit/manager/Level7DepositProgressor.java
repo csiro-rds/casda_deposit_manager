@@ -1,12 +1,12 @@
 package au.csiro.casda.deposit.manager;
 
-import javax.transaction.Transactional;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import au.csiro.casda.datadeposit.DepositStateChangeListener;
 import au.csiro.casda.datadeposit.DepositStateFactory;
@@ -54,7 +54,7 @@ public class Level7DepositProgressor
      * @param dapCollectionId
      *            the level 7 collection id (corresponds with the Data Access Portal data collection id)
      */
-    @Transactional(value = Transactional.TxType.REQUIRED, rollbackOn = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void progressCollection(Long dapCollectionId)
     {
         Level7Collection observation = level7CollectionRepository.findByDapCollectionId(dapCollectionId);

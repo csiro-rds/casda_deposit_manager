@@ -1,5 +1,7 @@
 package au.csiro.casda.deposit.state;
 
+import au.csiro.casda.datadeposit.DepositState;
+
 /*
  * #%L
  * CSIRO ASKAP Science Data Archive
@@ -36,6 +38,6 @@ public class Level7DepositingDepositState extends ParentDepositableArtefactDepos
     public Level7DepositingDepositState(DepositStateFactory stateFactory,
             ParentDepositableArtefact parentDepositableArtefact)
     {
-        super(stateFactory, parentDepositableArtefact, Type.CLEANUP);
+        super(stateFactory, parentDepositableArtefact, DepositState.Type.DEPOSITING, Type.ARCHIVING, false);
     }
 }

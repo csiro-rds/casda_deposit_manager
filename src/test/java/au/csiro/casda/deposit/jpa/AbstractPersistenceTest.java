@@ -81,6 +81,9 @@ public abstract class AbstractPersistenceTest
     private TestQualityFlagRepository myQualityFlagRepository;
     
     @Autowired
+    private TestValidationNoteRepository myValidationNoteRepository;
+    
+    @Autowired
     private TestObservationProjectQualityFlagRepository myObservationProjectQualityFlagRepository;
 
     public AbstractPersistenceTest() throws Exception
@@ -124,6 +127,7 @@ public abstract class AbstractPersistenceTest
                 myImageCubeRepository.deleteAll();
                 myMeasurementSetRepository.deleteAll();
                 myObservationRepository.deleteAll();
+                myValidationNoteRepository.deleteAll();
                 myProjectRepository.deleteAll();
                 myQualityFlagRepository.deleteAll();
                 myObservationProjectQualityFlagRepository.deleteAll();

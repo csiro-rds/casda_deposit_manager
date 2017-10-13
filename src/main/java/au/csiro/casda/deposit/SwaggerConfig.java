@@ -59,7 +59,7 @@ public class SwaggerConfig
                 // Here we disable auto generating of responses for REST-endpoints
                 .useDefaultResponseMessages(false)
                 // Here we specify URI patterns which will be included in Swagger docs. Use regex for this purpose.
-                .includePatterns("/observations.*", "/projects.*", "/level_7_collections.*");
+                .includePatterns("/observations.*", "/projects.*", "/level_7_collections.*","/level_5_deposits.*");
     }
 
 }

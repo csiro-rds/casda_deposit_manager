@@ -15,8 +15,8 @@ import au.csiro.casda.deposit.SingleJobMonitorFactory;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.NgasService.ServiceCallException;
 import au.csiro.casda.deposit.services.NgasService.Status;
-import au.csiro.casda.jobmanager.ProcessJobBuilder;
 import au.csiro.casda.jobmanager.ProcessJob;
+import au.csiro.casda.jobmanager.ProcessJobBuilder;
 import au.csiro.casda.jobmanager.SingleJobMonitor;
 
 /*
@@ -144,6 +144,9 @@ public abstract class CasdaArchivingDepositState extends ArchivingDepositState
             case "REG":
                 // need to request dual state
                 this.requestDualState(filePath);
+                break;
+            case "dmattr information not available":
+                // DMF can be down for periods of time - we just ride it out
                 break;
             default:
                 // unknown file status

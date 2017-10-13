@@ -37,6 +37,7 @@ import au.csiro.casda.jobmanager.JobManager.JobStatus;
 import au.csiro.casda.jobmanager.ProcessJob;
 import au.csiro.casda.entity.observation.Catalogue;
 import au.csiro.casda.entity.observation.CatalogueType;
+import au.csiro.casda.entity.observation.Level7Collection;
 import au.csiro.casda.entity.observation.Observation;
 
 /**
@@ -96,9 +97,9 @@ public class CasdaCatalogueProcessingDepositStateTest
     }
 
     @Test
-    public void testProgressContinuumComponentCatalogueProgressesWhenJobFinished()
+    public void testProgressContinuumComponentCatalogueDoesNotProgressWhenJobFinished()
     {
-        testProgressCatalogueProgressesWhenJobFinished(CatalogueType.CONTINUUM_COMPONENT);
+        testProgressCatalogueDoesNotProgressWhenJobFinished(CatalogueType.CONTINUUM_COMPONENT);
     }
 
     @Test
@@ -120,9 +121,9 @@ public class CasdaCatalogueProcessingDepositStateTest
     }
 
     @Test
-    public void testProgressContinuumIslandCatalogueProgressesWhenJobFinished()
+    public void testProgressContinuumIslandCatalogueDoesNotProgressWhenJobFinished()
     {
-        testProgressCatalogueProgressesWhenJobFinished(CatalogueType.CONTINUUM_ISLAND);
+        testProgressCatalogueDoesNotProgressWhenJobFinished(CatalogueType.CONTINUUM_ISLAND);
     }
 
     @Test
@@ -156,15 +157,15 @@ public class CasdaCatalogueProcessingDepositStateTest
     }
 
     @Test
-    public void testProgressSpectralLineAbsorptionCatalogueProgressesWhenJobFinished()
+    public void testProgressSpectralLineAbsorptionCatalogueDoesNotProgressWhenJobFinished()
     {
-        testProgressCatalogueProgressesWhenJobFinished(CatalogueType.SPECTRAL_LINE_ABSORPTION);
+        testProgressCatalogueDoesNotProgressWhenJobFinished(CatalogueType.SPECTRAL_LINE_ABSORPTION);
     }
     
     @Test
-    public void testProgressSpectralLineEmissionCatalogueProgressesWhenJobFinished()
+    public void testProgressSpectralLineEmissionCatalogueDoesNotProgressWhenJobFinished()
     {
-        testProgressCatalogueProgressesWhenJobFinished(CatalogueType.SPECTRAL_LINE_EMISSION);
+        testProgressCatalogueDoesNotProgressWhenJobFinished(CatalogueType.SPECTRAL_LINE_EMISSION);
     }
 
     @Test
@@ -192,9 +193,9 @@ public class CasdaCatalogueProcessingDepositStateTest
     }
 
     @Test
-    public void testProgressPolarisationCatalogueProgressesWhenJobFinished()
+    public void testProgressPolarisationCatalogueDoesNotProgressWhenJobFinished()
     {
-        testProgressCatalogueProgressesWhenJobFinished(CatalogueType.POLARISATION_COMPONENT);
+        testProgressCatalogueDoesNotProgressWhenJobFinished(CatalogueType.POLARISATION_COMPONENT);
     }
 
     @Test
@@ -203,9 +204,16 @@ public class CasdaCatalogueProcessingDepositStateTest
         testProgressCatalogueDoesNothingWhileJobStillRunning(CatalogueType.POLARISATION_COMPONENT);
     }
 
+    @Test
+    public void testProgressDerivedCatalogueNotStartedStartsJob()
+    {
+        testProgressCatalogueStartsNewJob(CatalogueType.DERIVED_CATALOGUE, "derived-catalogue");
+    }
+
     private void testProgressCatalogueStartsNewJob(CatalogueType catalogueType, String expectedCatalogueCommandArg)
     {
         Catalogue catalogue = createCatalogue(catalogueType);
+        boolean isDerived = catalogueType == CatalogueType.DERIVED_CATALOGUE;
 
         ProcessJob job = mock(ProcessJob.class);
 
@@ -213,7 +221,7 @@ public class CasdaCatalogueProcessingDepositStateTest
                 new CasdaCatalogueProcessingDepositState(stateFactory, catalogue, depositObservationParentDirectory,
                         processBuilder, jobManager);
 
-        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId());
+        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId(), catalogueType);
 
         when(jobManager.getJobStatus(jobId)).thenReturn(null);
 
@@ -226,11 +234,15 @@ public class CasdaCatalogueProcessingDepositStateTest
         verify(processBuilder, times(1)).setCommand(anyString());
         verify(processBuilder).setCommand(eq(CasdaCatalogueProcessingDepositState.CATALOGUE_IMPORTER_TOOL_NAME));
 
-        verify(processBuilder, times(4)).addCommandArgument(anyString(), anyString());
+        verify(processBuilder, times(isDerived ? 5 : 4)).addCommandArgument(anyString(), anyString());
         verify(processBuilder).addCommandArgument("-catalogue-type", expectedCatalogueCommandArg);
         verify(processBuilder).addCommandArgument("-parent-id", "12345");
         verify(processBuilder).addCommandArgument("-catalogue-filename", "filename");
         verify(processBuilder).addCommandArgument("-infile", "dir/12345/filename");
+        if (isDerived)
+        {
+            verify(processBuilder).addCommandArgument("-dc-common-id", "10042");
+        }
 
         // verify that the job was started
         verify(jobManager, times(1)).startJob(eq(job));
@@ -247,7 +259,7 @@ public class CasdaCatalogueProcessingDepositStateTest
                 new CasdaCatalogueProcessingDepositState(stateFactory, catalogue, depositObservationParentDirectory,
                         processBuilder, jobManager);
 
-        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId());
+        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId(), catalogueType);
 
         JobStatus failedJobStatus = mock(JobStatus.class);
         when(failedJobStatus.isFailed()).thenReturn(true);
@@ -263,7 +275,7 @@ public class CasdaCatalogueProcessingDepositStateTest
 
     }
 
-    public void testProgressCatalogueProgressesWhenJobFinished(CatalogueType catalogueType)
+    public void testProgressCatalogueDoesNotProgressWhenJobFinished(CatalogueType catalogueType)
     {
         Catalogue catalogue = createCatalogue(catalogueType);
 
@@ -271,7 +283,7 @@ public class CasdaCatalogueProcessingDepositStateTest
                 new CasdaCatalogueProcessingDepositState(stateFactory, catalogue, depositObservationParentDirectory,
                         processBuilder, jobManager);
 
-        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId());
+        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId(), catalogueType);
 
         JobStatus finishedJobStatus = mock(JobStatus.class);
         when(finishedJobStatus.isFailed()).thenReturn(false);
@@ -283,8 +295,8 @@ public class CasdaCatalogueProcessingDepositStateTest
         // if the job is finished, it should not start a job
         verify(jobManager, never()).startJob(any(ProcessJob.class));
 
-        // verify that the catalogue state is transitioned to the next status
-        assertEquals(next, catalogue.getDepositState());
+        // verify that the catalogue state has not transitioned to the next status
+        assertEquals(initial, catalogue.getDepositState());
     }
 
     public void testProgressCatalogueDoesNothingWhileJobStillRunning(CatalogueType catalogueType)
@@ -295,7 +307,7 @@ public class CasdaCatalogueProcessingDepositStateTest
                 new CasdaCatalogueProcessingDepositState(stateFactory, catalogue, depositObservationParentDirectory,
                         processBuilder, jobManager);
 
-        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId());
+        String jobId = getCatalogueJobId(catalogue.getParent().getUniqueId(), catalogueType);
 
         JobStatus runningJobStatus = mock(JobStatus.class);
         when(runningJobStatus.isFailed()).thenReturn(false);
@@ -322,15 +334,27 @@ public class CasdaCatalogueProcessingDepositStateTest
         when(stateFactory.createState(eq(Type.PROCESSED), eq(catalogue))).thenReturn(next);
         when(stateFactory.createState(eq(Type.FAILED), eq(catalogue))).thenReturn(failed);
 
-        Observation observation = new Observation();
-        observation.setSbid(12345);
-        observation.addCatalogue(catalogue);
+        if (catalogueType == CatalogueType.DERIVED_CATALOGUE)
+        {
+            Level7Collection collection = new Level7Collection();
+            collection.setDapCollectionId(12345);
+            collection.setDcCommonId(10042);
+            collection.addCatalogue(catalogue);
+        }
+        else
+        {
+            Observation observation = new Observation();
+            observation.setSbid(12345);
+            observation.addCatalogue(catalogue);
+        }
 
         return catalogue;
     }
 
-    private String getCatalogueJobId(String sbid)
+    private String getCatalogueJobId(String sbid, CatalogueType catalogueType)
     {
-        return "catalogue_import-observations/" + sbid + "/catalogues/filename-0";
+        String prefix = catalogueType == CatalogueType.DERIVED_CATALOGUE ? "catalogue_import-level7/"
+                : "catalogue_import-observations/";
+        return prefix + sbid + "/catalogues/filename-0";
     }
 }

@@ -29,11 +29,13 @@ import org.mockito.Spy;
 import au.csiro.casda.datadeposit.DepositState.Type;
 import au.csiro.casda.deposit.CasdaToolProcessJobBuilderFactory;
 import au.csiro.casda.deposit.SingleJobMonitorFactory;
+import au.csiro.casda.deposit.jdbc.SimpleJdbcRepository;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.NgasService.Status;
 import au.csiro.casda.deposit.services.VoToolsService;
 import au.csiro.casda.deposit.state.CasdaDepositStateFactory;
 import au.csiro.casda.deposit.state.CasdaDepositStateFactory.ProcessJobType;
+import au.csiro.casda.entity.observation.EncapsulationFile;
 import au.csiro.casda.jobmanager.CasdaToolProcessJobBuilder;
 import au.csiro.casda.jobmanager.JavaProcessJobFactory;
 import au.csiro.casda.jobmanager.JobManager;
@@ -91,6 +93,9 @@ public abstract class AbstractDepositableArtefactTest
     @Mock
     private VoToolsService voToolsService;
 
+    @Mock
+    private SimpleJdbcRepository simpleJdbcRepository;
+
     @Before
     public void setup() throws Exception
     {
@@ -98,13 +103,28 @@ public abstract class AbstractDepositableArtefactTest
 
         observationParentDir = tempFolder.newFolder("observation");
         level7ParentDir = tempFolder.newFolder("level7");
+        
+		JobStatus status = mock(JobStatus.class);
+		when(jobManager.getJobStatus(any(String.class))).thenReturn(status);
+		when(status.isFinished()).thenReturn(true);
+		
+		Status ngasStatus = mock(Status.class);
+		when(ngasStatus.wasFailure()).thenReturn(false);
+		when(ngasService.getStatus(any(String.class))).thenReturn(ngasStatus);
+		
+		singleJobMonitorFactory = mock(SingleJobMonitorFactory.class);
+		SingleJobMonitor jobMonitor = mock(SingleJobMonitor.class);
+		when(singleJobMonitorFactory.createSingleJobMonitor()).thenReturn(jobMonitor);
+		when(jobMonitor.isJobFailed()).thenReturn(false);
+		when(jobMonitor.isJobFinished()).thenReturn(true);
+		when(jobMonitor.getJobOutput()).thenReturn("DUL");
 
-        this.depositStateFactory =
-                spy(new CasdaDepositStateFactory(ngasService, jobManager, factory, new JavaProcessJobFactory(),
-                        singleJobMonitorFactory, voToolsService, observationParentDir.getAbsolutePath(),
-                        level7ParentDir.getAbsolutePath(), "{\"stageCommand\"}", "SIMPLE", "stageCommandAndArgs",
-                        "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs", "{\"archiveStatus\"}",
-                        "{\"archivePut\"}", " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }"));
+        this.depositStateFactory = spy(new CasdaDepositStateFactory(ngasService, jobManager, factory,
+                new JavaProcessJobFactory(), singleJobMonitorFactory, voToolsService, simpleJdbcRepository, "",
+                observationParentDir.getAbsolutePath(), level7ParentDir.getAbsolutePath(), "{\"stageCommand\"}",
+                "SIMPLE", "stageCommandAndArgs", "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs",
+                "{\"archiveStatus\"}", "{\"archivePut\"}",
+                " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }", ""));
         when(factory.createBuilder()).thenReturn(processBuilder);
         when(processBuilder.setCommand(any(String.class))).thenReturn(processBuilder);
         when(processBuilder.setProcessParameter(any(String.class), any(String.class))).thenReturn(processBuilder);
@@ -381,4 +401,6 @@ public abstract class AbstractDepositableArtefactTest
             Type checkpointDepositStateType);
 
     protected abstract DepositableArtefact createDepositableArtefactWithoutDepositStateFactory();
+    
+    protected abstract EncapsulationFile createEncapsulationFile();
 }

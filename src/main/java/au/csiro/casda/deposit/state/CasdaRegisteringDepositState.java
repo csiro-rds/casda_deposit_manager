@@ -94,16 +94,16 @@ public class CasdaRegisteringDepositState extends RegisteringDepositState
     @Override
     public void progress()
     {
-        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId());
+        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId(REGISTER_ARTEFACT_TOOL_NAME));
         if (jobStatus == null)
         {
-            Job job = processJobBuilder.createJob(getJobId(), REGISTER_ARTEFACT_TOOL_NAME);
+            Job job = processJobBuilder.createJob(getJobId(REGISTER_ARTEFACT_TOOL_NAME), REGISTER_ARTEFACT_TOOL_NAME);
             jobManager.startJob(job);
         }
         else if (jobStatus.isFailed())
         {
-            logger.error("Job {} failed while registering deposit state with output :{}", getJobId(),
-                    jobStatus.getJobOutput());
+            logger.error("Job {} failed while registering deposit state with output :{}", 
+            		getJobId(REGISTER_ARTEFACT_TOOL_NAME), jobStatus.getJobOutput());
             transitionTo(DepositState.Type.FAILED);
         }
         else if (jobStatus.isFinished())
@@ -119,12 +119,6 @@ public class CasdaRegisteringDepositState extends RegisteringDepositState
     public ChildDepositableArtefact getDepositable()
     {
         return (ChildDepositableArtefact) super.getDepositable();
-    }
-
-    private String getJobId()
-    {
-        return String.format("%s-%s-%d", REGISTER_ARTEFACT_TOOL_NAME, getDepositable().getUniqueIdentifier(),
-                getDepositable().getDepositFailureCount());
     }
 
     /**

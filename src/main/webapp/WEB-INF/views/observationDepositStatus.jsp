@@ -43,6 +43,13 @@
             </c:if>
 
 			<form method="post">
+				Find observation: 
+            	<input type="text" name="sbid" value=""></input>
+            	<input type="submit" name="search" value="Search"></input>
+            	<input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
+           </form>
+
+			<form method="post">
             	<input type="submit" name="manualPoll" value="Manual Poll"></input>
             	<input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
            </form>
@@ -70,7 +77,7 @@
 					<td>Failures</td>
 				</tr>
 
-				<c:forEach var="obs" items="${activeObservations}"
+				<c:forEach var="obs" items="${activeParentDepositables}"
 					varStatus="rowCounter">
 					<c:choose>
 						<c:when test="${rowCounter.count % 2 == 0}">
@@ -81,8 +88,8 @@
 						</c:otherwise>
 					</c:choose>
 					<c:choose>
-						<c:when test="${obsWithFailures.containsKey(obs.sbid)}">
-							<c:set var="failures" scope="page" value="${obsWithFailures.get(obs.sbid)}" />
+						<c:when test="${parentDepositableWithFailures.containsKey(obs.sbid)}">
+							<c:set var="failures" scope="page" value="${parentDepositableWithFailures.get(obs.sbid)}" />
 						</c:when>
 						<c:otherwise>
 							<c:set var="failures" scope="page" value="" />
@@ -90,7 +97,7 @@
 					</c:choose>
 
 					<tr class="${rowStyle}" style="valign='top'">
-                        <td><a href="level_5_deposits/${obs.sbid}">${obs.sbid}</a></td>
+                        <td><a href="${url}/${obs.sbid}">${obs.sbid}</a></td>
 						<td>${obs.obsStart}</td>
 						<td>${obs.depositStarted}</td>
 						<td align="right">${obs.imageCubes.size()}</td>
@@ -111,7 +118,41 @@
 				</c:forEach>
 			</table>
 
-			<h2>Recently Deposited (last ${depositedObservationsMaximumAge})</h2>
+			<h2>Invalid Observations</h2>
+			<c:if test="${empty invalidObservations}">
+			<p>None</p>
+			</c:if>
+			<c:if test="${not empty invalidObservations}">
+			<p>The observation.xml file of the following observations could not be successfully processed:</p>
+			<table class="obsTable">
+
+				<colgroup>
+					<col />
+				</colgroup>
+
+				<tr class="tableHeader">
+					<td>Scheduling Block Id</td>
+				</tr>
+
+				<c:forEach var="obs" items="${invalidObservations}"
+					varStatus="rowCounter">
+					<c:choose>
+						<c:when test="${rowCounter.count % 2 == 0}">
+							<c:set var="rowStyle" scope="page" value="even" />
+						</c:when>
+						<c:otherwise>
+							<c:set var="rowStyle" scope="page" value="odd" />
+						</c:otherwise>
+					</c:choose>
+
+					<tr class="${rowStyle}">
+						<td>${obs}</td>
+					</tr>
+				</c:forEach>
+			</table>
+			</c:if>
+
+			<h2>Recently Deposited (last ${depositedParentDepositablesMaximumAge})</h2>
 			<table class="obsTable">
 
 				<colgroup>
@@ -128,7 +169,7 @@
 					<td>Deposit Completed Date</td>
 				</tr>
 
-				<c:forEach var="obs" items="${completedObservations}"
+				<c:forEach var="obs" items="${completedParentDepositables}"
 					varStatus="rowCounter">
 					<c:choose>
 						<c:when test="${rowCounter.count % 2 == 0}">
@@ -140,7 +181,7 @@
 					</c:choose>
 
 					<tr class="${rowStyle}">
-						<td><a href="level_5_deposits/${obs.sbid}">${obs.sbid}</a></td>
+						<td><a href="${url}/${obs.sbid}">${obs.sbid}</a></td>
 						<td>${obs.obsStart}</td>
 						<td>${obs.depositStarted}</td>
 						<td>${obs.depositStateChanged}</td>
@@ -148,7 +189,7 @@
 				</c:forEach>
 			</table>
 
-			<h2>Failed Deposits</h2>
+			<h2>Failed Deposits (last ${failedObservationsMaximumAge})</h2>
 			<table class="obsTable">
 
 				<colgroup>
@@ -169,7 +210,7 @@
                     <td>Failures</td>
                 </tr>
 
-                <c:forEach var="obs" items="${failedObservations}"
+                <c:forEach var="obs" items="${failedParentDepositables}"
                     varStatus="rowCounter">
                     <c:choose>
                         <c:when test="${rowCounter.count % 2 == 0}">
@@ -180,29 +221,39 @@
                         </c:otherwise>
                     </c:choose>
                     <c:choose>
-                        <c:when test="${obsWithFailures.containsKey(obs.sbid)}">
-                            <c:set var="failures" scope="page" value="${obsWithFailures.get(obs.sbid)}" />
+                        <c:when test="${parentDepositableWithFailures.containsKey(obs.sbid)}">
+                            <c:set var="failures" scope="page" value="${parentDepositableWithFailures.get(obs.sbid)}" />
+                            <c:set var="maxErr" value="${failures.size()}" />
                         </c:when>
                         <c:otherwise>
                             <c:set var="failures" scope="page" value="" />
+                            <c:set var="maxErr" value="1" />
                         </c:otherwise>
                     </c:choose>
 
-                    <tr class="${rowStyle}" style="valign='top'">
-                        <td><a href="level_5_deposits/${obs.sbid}">${obs.sbid}</a></td>
+                    <tr class="${rowStyle}" style="vertical-align:top">
+                        <td><a href="${url}/${obs.sbid}">${obs.sbid}</a></td>
                         <td>${obs.obsStart}</td>
                         <td>${obs.depositStarted}</td>
                         <td align="right">${obs.imageCubes.size()}</td>
                         <td>${obs.depositStateChanged}</td>
                         <td>
                             <table>
-                            <c:forEach var="depositable" items="${failures}">
+                            <c:set var="extraErr" value="0" />
+                            <c:if test="${maxErr gt 5}">
+                            	<c:set var="extraErr" value="${maxErr-5}" />
+                            	<c:set var="maxErr" value="5" />
+                            </c:if>
+                            <c:forEach var="depositable" items="${failures}" end="${maxErr-1}">
                                 <tr>
                                     <td>${depositable.depositableArtefactTypeDescription}</td>
                                     <td>${depositable.filename}</td>
                                     <td>${depositable.checkpointStateType}</td>
                                 </tr>
                             </c:forEach>
+                            <c:if test="${extraErr gt 0}">
+                                <tr><td colspan='3'><b>and ${extraErr} further failure(s).</b></td></tr>
+                            </c:if>
                             </table>
                         </td>
                     </tr>

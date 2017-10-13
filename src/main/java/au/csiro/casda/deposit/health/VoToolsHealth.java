@@ -41,6 +41,7 @@ public class VoToolsHealth implements HealthIndicator
     @Override
     public Health health()
     {
+        Health.Builder healthDown = new Health.Builder().status("WARN");
         try
         {
             Map<String, Object> response = voToolsService.getHealth();
@@ -50,12 +51,12 @@ public class VoToolsHealth implements HealthIndicator
             }
             else
             {
-                return new Health.Builder().down().withDetail("health", response).build();
+                return healthDown.withDetail("health", response).build();
             }
         }
         catch (RuntimeException e)
         {
-            return new Health.Builder().down(e).build();
+            return healthDown.withException(e).build();
         }
 
     }

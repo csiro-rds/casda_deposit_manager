@@ -33,7 +33,7 @@ public class ObservationArchivingDepositState extends CasdaArchivingDepositState
      * Constructor
      * 
      * @param stateFactory
-     *            see {@link DepositState}
+     *            see {@link DepositStateFactory}
      * @param depositableArtefact
      *            the DepositableArtefact that the state pertains to
      * @param ngasArtefactVolumeMap

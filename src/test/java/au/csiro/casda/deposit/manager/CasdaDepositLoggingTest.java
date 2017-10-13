@@ -12,14 +12,13 @@ package au.csiro.casda.deposit.manager;
  * #L%
  */
 
-
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.logging.log4j.Level;
@@ -30,10 +29,14 @@ import org.junit.Test;
 import org.mockito.MockitoAnnotations;
 
 import au.csiro.casda.datadeposit.ChildDepositableArtefact;
+import au.csiro.casda.datadeposit.DepositState;
+import au.csiro.casda.datadeposit.DepositedDepositState;
+import au.csiro.casda.datadeposit.UndepositedDepositState;
 import au.csiro.casda.deposit.DepositManagerEvents;
 import au.csiro.casda.deposit.Log4JTestAppender;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
 import au.csiro.casda.entity.CasdaDepositableArtefactEntity;
+import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.Observation;
 
 
@@ -63,21 +66,65 @@ public class CasdaDepositLoggingTest
         Integer sbid = RandomUtils.nextInt(11111, 99999);
         Observation observation = mock(Observation.class);
         when(observation.getSbid()).thenReturn(sbid);
-        Set<ChildDepositableArtefact> depositableArtefacts = new HashSet<>();
+        List<ChildDepositableArtefact> depositableArtefacts = new ArrayList<>();
         when(observation.getDepositableArtefacts()).thenReturn(depositableArtefacts);
 
-        CasdaDepositableArtefactEntity artifact = mock(CasdaDepositableArtefactEntity.class);
-        depositableArtefacts.add(artifact);
+        CasdaDepositableArtefactEntity artefact = createMockArtefact(new UndepositedDepositState(null, null));
+        depositableArtefacts.add(artefact);
 
         List<Observation> depositingObservations = new ArrayList<>();
         depositingObservations.add(observation);
         ObservationRepository obsRepo = mock(ObservationRepository.class);
-        when(obsRepo.findDepositingObservations()).thenReturn(depositingObservations);
+        when(obsRepo.findDepositingObservationsForDepositStateTypeOrdered
+                (any(EnumSet.class))).thenReturn(depositingObservations);
 
         DateTime now = DateTime.now(DateTimeZone.UTC);
 
         when(observation.getDepositStarted()).thenReturn(now);
-        when(artifact.getDepositStateChanged()).thenReturn(now);
+        when(artefact.getDepositStateChanged()).thenReturn(now);
+
+        int observationTimeout = RandomUtils.nextInt(10000, 20000);
+        int artefactTimeout = Integer.MAX_VALUE;
+        CasdaDepositStatusProgressMonitor casdaDepositStatusPoller =
+                new CasdaDepositStatusProgressMonitor(observationTimeout, artefactTimeout, obsRepo);
+
+        // Before
+        casdaDepositStatusPoller.checkDepositableStatuses(now.getMillis() + observationTimeout - 1);
+        testAppender.verifyNoMessages();
+
+        // On
+        casdaDepositStatusPoller.checkDepositableStatuses(now.getMillis() + observationTimeout);
+        testAppender.verifyNoMessages();
+
+        // After
+        casdaDepositStatusPoller.checkDepositableStatuses(now.getMillis() + observationTimeout + 1);
+        testAppender.verifyLogMessage(Level.ERROR, DepositManagerEvents.E076.messageBuilder().add(sbid).toString());
+    }
+
+    @Test
+    public void testObservationRedepositTimeoutLogging()
+    {
+        Integer sbid = RandomUtils.nextInt(11111, 99999);
+        Observation observation = mock(Observation.class);
+        when(observation.getSbid()).thenReturn(sbid);
+        List<ChildDepositableArtefact> depositableArtefacts = new ArrayList<>();
+        when(observation.getDepositableArtefacts()).thenReturn(depositableArtefacts);
+
+        CasdaDepositableArtefactEntity artefact = createMockArtefact(new UndepositedDepositState(null, null));
+        depositableArtefacts.add(artefact);
+
+        List<Observation> depositingObservations = new ArrayList<>();
+        depositingObservations.add(observation);
+        ObservationRepository obsRepo = mock(ObservationRepository.class);
+        when(obsRepo.findDepositingObservationsForDepositStateTypeOrdered
+                (any(EnumSet.class))).thenReturn(depositingObservations);
+
+        DateTime now = DateTime.now(DateTimeZone.UTC);
+        DateTime yesterday = now.minus(3600*24);
+
+        when(observation.getDepositStarted()).thenReturn(yesterday);
+        when(observation.getRedepositStarted()).thenReturn(now);
+        when(artefact.getDepositStateChanged()).thenReturn(now);
 
         int observationTimeout = RandomUtils.nextInt(10000, 20000);
         int artefactTimeout = Integer.MAX_VALUE;
@@ -103,21 +150,25 @@ public class CasdaDepositLoggingTest
         Integer sbid = RandomUtils.nextInt(11111, 99999);
         Observation observation = mock(Observation.class);
         when(observation.getSbid()).thenReturn(sbid);
-        Set<ChildDepositableArtefact> depositableArtefacts = new HashSet<>();
+        List<ChildDepositableArtefact> depositableArtefacts = new ArrayList<>();
         when(observation.getDepositableArtefacts()).thenReturn(depositableArtefacts);
 
-        CasdaDepositableArtefactEntity artifact = mock(CasdaDepositableArtefactEntity.class);
-        depositableArtefacts.add(artifact);
+        CasdaDepositableArtefactEntity artefact = createMockArtefact(new UndepositedDepositState(null, null));
+        depositableArtefacts.add(artefact);
+        ImageCube finishedArtefact = new ImageCube();
+        finishedArtefact.setDepositState(new DepositedDepositState(null, finishedArtefact));
+        depositableArtefacts.add(finishedArtefact);
 
         List<Observation> depositingObservations = new ArrayList<>();
         depositingObservations.add(observation);
         ObservationRepository obsRepo = mock(ObservationRepository.class);
-        when(obsRepo.findDepositingObservations()).thenReturn(depositingObservations);
+        when(obsRepo.findDepositingObservationsForDepositStateTypeOrdered
+                (any(EnumSet.class))).thenReturn(depositingObservations);
 
         DateTime now = DateTime.now(DateTimeZone.UTC);
 
         when(observation.getDepositStarted()).thenReturn(now);
-        when(artifact.getDepositStateChanged()).thenReturn(now);
+        when(artefact.getDepositStateChanged()).thenReturn(now);
 
         int observationTimeout = Integer.MAX_VALUE;
         int artefactTimeout = RandomUtils.nextInt(10000, 20000);
@@ -135,6 +186,15 @@ public class CasdaDepositLoggingTest
         // After
         casdaDepositStatusPoller.checkDepositableStatuses(now.getMillis() + artefactTimeout + 1);
         testAppender.verifyLogMessage(Level.ERROR,
-                DepositManagerEvents.E074.messageBuilder().add(artifact.getFilename()).add(sbid).toString());
+                DepositManagerEvents.E074.messageBuilder().add(artefact.getFilename()).add(sbid).toString());
+        // Only the undeposited artefact should have been reported
+        testAppender.verifyNoMessages();
+    }
+
+    private CasdaDepositableArtefactEntity createMockArtefact(DepositState depositState)
+    {
+        CasdaDepositableArtefactEntity artefact = mock(CasdaDepositableArtefactEntity.class);
+        when(artefact.getDepositState()).thenReturn(depositState);
+        return artefact;
     }
 }

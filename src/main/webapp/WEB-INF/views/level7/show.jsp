@@ -79,7 +79,7 @@
                 </tr>
             </table>
     
-            <h3>Observation Artefacts</h3>
+            <h3>Collection Artefacts</h3>
     
             <table class="obsTable">
     
@@ -109,6 +109,31 @@
                         <td>${depositable.checkpointStateType}</td>
                     </tr>
                 </c:forEach>
+                
+                                <c:set var="prevRemainder" value="0" />
+                <c:if test="${rowStyle eq 'odd'}">
+                	<c:set var="prevRemainder" value="1" />
+                </c:if>
+                <c:forEach var="summary" items="${artefactSummaries}" varStatus="rowCounter">
+                	
+                    <c:choose>
+                        <c:when test="${(prevRemainder+rowCounter.count) % 2 == 0}">
+                            <c:set var="rowStyle" scope="page" value="even" />
+                        </c:when>
+                        <c:otherwise>
+                            <c:set var="rowStyle" scope="page" value="odd" />
+                        </c:otherwise>
+                    </c:choose>
+    
+                    <tr class="${rowStyle}">
+                        <td>${summary.description}</td>
+                        <td>${summary.numArtefacts} file(s)</td>
+                        <td>${summary.depositStateDescription}</td>
+                        <td>${summary.depositStateChanged}</td>
+                        <td>${summary.checkpointStateType}</td>
+                    </tr>
+                </c:forEach>
+                
             </table>
         </fieldset>
     </fieldset>

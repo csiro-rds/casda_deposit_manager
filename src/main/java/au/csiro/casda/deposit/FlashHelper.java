@@ -32,8 +32,8 @@ import org.springframework.web.servlet.support.RequestContextUtils;
 public class FlashHelper
 {
     /**
-     * Adds a 'flash' message to the FlashMap associated with the given request. The 'flash' is a Map<String,
-     * String> that is automatically added to the controller Model, and available with the key 'flash'.
+     * Adds a 'flash' message to the FlashMap associated with the given request. The 'flash' is a Map&lt;String,
+     * String&gt; that is automatically added to the controller Model, and available with the key 'flash'.
      * 
      * @param request
      *            an HttpServletRequest

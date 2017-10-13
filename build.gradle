@@ -35,8 +35,8 @@ project.description = 'CSIRO CASDA Project - CASDA Deposit Manager'
         
 ext {
 	majorVersion = 1
-	minorVersion = 2
-	springBootVer = '1.1.12.RELEASE'
+	minorVersion = 8
+	springBootVer = '1.3.6.RELEASE'
 }
         
 sourceCompatibility = 1.8
@@ -45,11 +45,10 @@ targetCompatibility = 1.8
 repositories {
     mavenLocal() // Required when we use locally-built versions of CSIRO projects
     mavenCentral()
-    maven { url "http://jenkins-cdc.it.csiro.au:8085/nexus/content/repositories/cd/" }
-    maven { url "http://jenkins-cdc.it.csiro.au:8085/nexus/content/repositories/releases/" }
-    maven { url "http://jenkins-cdc.it.csiro.au:8085/nexus/content/repositories/thirdparty/" }
+    maven { url "http://jenkins-apps.it.csiro.au:8081/nexus/content/repositories/cd/" }
+    maven { url "http://jenkins-apps.it.csiro.au:8081/nexus/content/repositories/releases/" }
+    maven { url "http://jenkins-apps.it.csiro.au:8081/nexus/content/repositories/thirdparty/" }
     maven { url "http://download.osgeo.org/webdav/geotools" }
-    maven { url "http://www.hibernatespatial.org/repository" }
     jcenter()
 }
 
@@ -64,25 +63,22 @@ configurations {
     all*.exclude group: "org.hamcrest", module: "hamcrest-core"
 }
 
-dependencies {
-    compile ('au.csiro:casda_commons:1.0.165')
-    {
-    	//TODO included because of mismath with casda commons to be removed once both components are working on 
-    	//tomcat 8
-    	exclude(module: 'hibernate-core')
-    }
-    compile('au.csiro:job_manager:1.1.16')
+dependencies 
+{
+    compile ("au.csiro:casda_commons:1.0.251")
+    compile("au.csiro:job_manager:1.1.24")
 
 	compile("javax.servlet:javax.servlet-api:3.1.0")
     compile("org.flywaydb:flyway-core:3.2.1")
     compile("org.postgresql:postgresql:9.3-1103-jdbc41")
     compile("org.springframework.boot:spring-boot-starter-integration:${springBootVer}")
     compile("org.springframework.boot:spring-boot-starter-actuator:${springBootVer}")
-    compile("org.springframework.boot:spring-boot-starter-web:${springBootVer}")
     compile("org.springframework.boot:spring-boot-starter-data-jpa:${springBootVer}")
     compile("org.springframework.boot:spring-boot-starter-ws:${springBootVer}") 
     compile("org.springframework.boot:spring-boot-starter-security:${springBootVer}")
 
+	compile group: 'javax.el', name: 'javax.el-api', version: '2.2.5'
+	
     // Swagger UI for showing interactive API docs    
     compile("com.mangofactory:swagger-springmvc:1.0.2")
     compile "org.ajar:swagger-spring-mvc-ui:0.4"
@@ -108,7 +104,7 @@ dependencies {
     testCompile("org.springframework.boot:spring-boot-starter-test:${springBootVer}")
     
     // For testing JSON Path expressions
-    testCompile("com.jayway.jsonpath:json-path:0.8.1")
+    testCompile("com.jayway.jsonpath:json-path:2.2.0")
     
     // for json de/serialisation tests. Currently only being used for one test which need a reflective comparison 
     //of objects in AbstractMarshallingTest.java can probably be removed when a newer version of hamcrest features 

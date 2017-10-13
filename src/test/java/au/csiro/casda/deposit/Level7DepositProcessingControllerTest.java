@@ -17,6 +17,9 @@ import static org.hamcrest.Matchers.array;
 import static org.hamcrest.Matchers.emptyArray;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -31,6 +34,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.util.Map;
 
 import org.apache.commons.io.Charsets;
 import org.apache.commons.io.FileUtils;
@@ -49,7 +53,9 @@ import au.csiro.casda.BadRequestException;
 import au.csiro.casda.ResourceNotFoundException;
 import au.csiro.casda.deposit.manager.Level7DepositService;
 import au.csiro.casda.dto.DepositStateDTO;
+import au.csiro.casda.dto.DepositableArtefactDTO;
 import au.csiro.casda.dto.ParentDepositableDTO;
+import au.csiro.casda.entity.observation.Level7Collection;
 import au.csiro.casda.jobmanager.CasdaToolProcessJobBuilder;
 import au.csiro.casda.jobmanager.ProcessJob;
 import au.csiro.casda.jobmanager.SingleJobMonitor;
@@ -100,9 +106,8 @@ public class Level7DepositProcessingControllerTest
         MockitoAnnotations.initMocks(this);
         tempLevel7Folder = tempFolder.newFolder("level7");
 
-        controller =
-                new Level7DepositProcessingController(tempFolder.newFolder("validation").toString(),
-                        level7DepositService, processBuilderFactory, singleJobMonitorFactory);
+        controller = new Level7DepositProcessingController(tempFolder.newFolder("validation").toString(),
+                "^[A-Za-z0-9_/:\\\\-]+$", level7DepositService, processBuilderFactory, singleJobMonitorFactory);
     }
 
     @Test
@@ -157,7 +162,7 @@ public class Level7DepositProcessingControllerTest
         exception.expect(BadRequestException.class);
         exception.expectMessage("Invalid collection id");
 
-        controller.initiateLevel7CollectionDeposit("ABC213", "0");
+        controller.initiateLevel7CollectionDeposit("ABC213", "0", "1234");
     }
 
     @Test
@@ -166,7 +171,7 @@ public class Level7DepositProcessingControllerTest
         exception.expect(BadRequestException.class);
         exception.expectMessage("Invalid collection id");
 
-        controller.initiateLevel7CollectionDeposit("ABC213", "-5");
+        controller.initiateLevel7CollectionDeposit("ABC213", "-5", "1234");
     }
 
     @Test
@@ -175,7 +180,7 @@ public class Level7DepositProcessingControllerTest
         exception.expect(BadRequestException.class);
         exception.expectMessage("Invalid collection id");
 
-        controller.initiateLevel7CollectionDeposit("ABC213", "5.1");
+        controller.initiateLevel7CollectionDeposit("ABC213", "5.1", "1234");
     }
 
     @Test
@@ -184,7 +189,7 @@ public class Level7DepositProcessingControllerTest
         exception.expect(BadRequestException.class);
         exception.expectMessage("Invalid collection id");
 
-        controller.initiateLevel7CollectionDeposit("ABC213", "string");
+        controller.initiateLevel7CollectionDeposit("ABC213", "string", "1234");
     }
 
     @Test
@@ -194,7 +199,7 @@ public class Level7DepositProcessingControllerTest
                 mock(Level7DepositService.CollectionIllegalStateException.class);
         when(expectedException.getMessage()).thenReturn("Weee!");
         doThrow(expectedException).when(level7DepositService).initiateLevel7CollectionDeposit("ABC213",
-                new Long(515198));
+                new Long(515198), new Integer(1234));
 
         exception.expect(BadRequestException.class);
         exception.expectMessage("Weee!");
@@ -203,7 +208,7 @@ public class Level7DepositProcessingControllerTest
         parentDTO.setDepositState(DepositStateDTO.BUILDING_DEPOSIT);
         when(level7DepositService.getLevel7CollectionSummary("ABC213", new Long(515198))).thenReturn(parentDTO);
 
-        controller.initiateLevel7CollectionDeposit("ABC213", "515198");
+        controller.initiateLevel7CollectionDeposit("ABC213", "515198", "1234");
     }
 
     @Test
@@ -218,7 +223,7 @@ public class Level7DepositProcessingControllerTest
         ParentDepositableDTO parentDTO = new ParentDepositableDTO(catalogueDirectory);
         when(level7DepositService.getLevel7CollectionSummary("ABC213", new Long(515198))).thenReturn(parentDTO);
 
-        MessageDTO result = controller.initiateLevel7CollectionDeposit("ABC213", "515198");
+        MessageDTO result = controller.initiateLevel7CollectionDeposit("ABC213", "515198", "1234");
         assertEquals(MessageCode.SUCCESS, result.getMessageCode());
         assertEquals("Successfully created level 7 collection 515198", result.getMessage());
 
@@ -347,7 +352,7 @@ public class Level7DepositProcessingControllerTest
     public void testValidateEmptyCatalogue() throws Exception
     {
         MockMultipartFile file = new MockMultipartFile("catalogue.xml", "".getBytes(Charsets.UTF_8));
-        String[] messages = controller.validateLevel7Catalogue("AS030", "119911", file);
+        String[] messages = controller.validateLevel7Catalogue("AS030", "119911", "1234", file);
         assertThat(messages, is(array(equalTo("File is empty"))));
     }
 
@@ -368,15 +373,76 @@ public class Level7DepositProcessingControllerTest
                         + "Error in FIELD: 2\nAnother message\nError in TABLE: 3\n\nAfter blank line\n"
                         + "Error in PARAM 2\nSome Error in\n    \t Error in TABLE: something");
         MockMultipartFile file = new MockMultipartFile("catalogue.xml", "<xml></xml>".getBytes(Charsets.UTF_8));
-        String[] messages = controller.validateLevel7Catalogue("AS030", "119911", file);
+        String[] messages = controller.validateLevel7Catalogue("AS030", "119911", "1234", file);
         assertThat(
                 messages,
                 is(array(equalTo("Error in PARAM: 1"), equalTo("Error in something:"), equalTo("Error in FIELD: 2"),
                         equalTo("Error in TABLE: 3"), equalTo("Error in TABLE: something"))));
 
         when(monitor.getJobOutput()).thenReturn("");
-        messages = controller.validateLevel7Catalogue("AS030", "119911", file);
+        messages = controller.validateLevel7Catalogue("AS030", "119911", "1234", file);
         assertThat(messages, is(emptyArray()));
     }
 
+    @Test
+    public void testSaveLevel7CollectionFailsWhitelist() throws Exception
+    {
+        exception.expect(ResourceNotFoundException.class);
+        exception.expectMessage("IMAGE_CUBE:InvalidPath");
+
+        controller.saveLevel7Collection("AS030", "119911", "119911", new String[] { "aaa;123" },
+                new String[] { "IMAGE_CUBE" });
+    }
+
+    @Test
+    public void testSaveLevel7CollectionDoesNotExist() throws Exception
+    {
+        exception.expect(ResourceNotFoundException.class);
+        exception.expectMessage("SPECTRUM:InaccessiblePath");
+
+        controller.saveLevel7Collection("AS030", "119911", "119911", new String[] { "/does_not_exist" },
+                new String[] { "SPECTRUM" });
+    }
+
+    @Test
+    public void testSaveLevel7CollectionValidFile() throws Exception
+    {
+        File l7ImageFolder = tempFolder.newFolder("l7Images");
+
+        ParentDepositableDTO level7Collection = controller.saveLevel7Collection("AS030", "119911", "119911",
+                new String[] { l7ImageFolder.getAbsolutePath() }, new String[] { "SPECTRUM" });
+        assertThat(level7Collection, is(notNullValue()));
+        assertThat(level7Collection.getDepositableArtefacts(), is(emptyArray()));
+    }
+
+    @Test
+    public void testListFilesForLevel7CollectionValidFile() throws Exception
+    {        
+        File l7ImageFolder = tempFolder.newFolder("l7Images");
+        tempFolder.newFile("l7Images/testFile.fits");
+        tempFolder.newFile("l7Images/testFile2.fits.gz");
+        tempFolder.newFile("l7Images/testFile2.png");
+        tempFolder.newFile("l7Images/.ignoreme");
+        Level7Collection l7c = new Level7Collection(119911);
+        l7c.setImageCubePath(l7ImageFolder.getAbsolutePath());
+
+        when(level7DepositService.getLevel7Collection("AS030", new Long(119911))).thenReturn(l7c);
+        
+        Map<String, DepositableArtefactDTO[]> level7CollectionFileListMap =
+                controller.getLevel7CollectionFileList("AS030", "119911");
+        assertThat(level7CollectionFileListMap, is(notNullValue()));
+        DepositableArtefactDTO[] artefacts = level7CollectionFileListMap.get("IMAGE_CUBE");
+        assertThat(artefacts, is(notNullValue()));
+        assertThat(artefacts, not(emptyArray()));
+        assertThat(artefacts[0].getFilename(), is("testFile.fits"));
+        assertThat(artefacts[0].getThumbnailName(), is(nullValue()));
+        assertThat(artefacts[1].getFilename(), is("testFile2.fits.gz"));
+        assertThat(artefacts[1].getThumbnailName(), is("testFile2.png"));
+        assertThat(artefacts.length, is(2));
+        assertThat(level7CollectionFileListMap.size(), is(1));
+        
+    }
+
+    
+    
 }

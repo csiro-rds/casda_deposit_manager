@@ -22,6 +22,7 @@ import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.datadeposit.StateChecks;
 import au.csiro.casda.deposit.CasdaToolProcessJobBuilderFactory;
 import au.csiro.casda.deposit.SingleJobMonitorFactory;
+import au.csiro.casda.deposit.jdbc.SimpleJdbcRepository;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.VoToolsService;
 import au.csiro.casda.deposit.state.CasdaDepositStateFactory;
@@ -75,6 +76,9 @@ public class ObservationDepositingRecoveryTest
     @Mock
     private VoToolsService voToolsService;
 
+    @Mock
+    private SimpleJdbcRepository simpleJdbcRepository;
+
     @Before
     public void setup() throws Exception
     {
@@ -83,12 +87,12 @@ public class ObservationDepositingRecoveryTest
         observationParentDir = tempFolder.newFolder("observation");
         level7ParentDir = tempFolder.newFolder("level7");
 
-        this.depositStateFactory =
-                new CasdaDepositStateFactory(ngasService, jobManager, factory, new JavaProcessJobFactory(),
-                        new SingleJobMonitorFactory(), voToolsService, observationParentDir.getAbsolutePath(),
-                        level7ParentDir.getAbsolutePath(), "{\"stageCommand\"}", "SIMPLE", "stageCommandAndArgs",
-                        "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs", "{\"archiveStatus\"}",
-                        "{\"archivePut\"}", " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }");
+        this.depositStateFactory = new CasdaDepositStateFactory(ngasService, jobManager, factory,
+                new JavaProcessJobFactory(), new SingleJobMonitorFactory(), voToolsService, simpleJdbcRepository, "",
+                observationParentDir.getAbsolutePath(), level7ParentDir.getAbsolutePath(), "{\"stageCommand\"}",
+                "SIMPLE", "stageCommandAndArgs", "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs",
+                "{\"archiveStatus\"}", "{\"archivePut\"}",
+                " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }", "");
         when(factory.createBuilder()).thenReturn(processBuilder);
         when(processBuilder.setCommand(any(String.class))).thenReturn(processBuilder);
         when(processBuilder.addCommandArgument(any(String.class), any(String.class))).thenReturn(processBuilder);
@@ -120,7 +124,7 @@ public class ObservationDepositingRecoveryTest
         StateChecks.checkStateIsUndeposited(imageCube2);
 
         observation.progressDeposit();
-        ObservationStateChecks.checkStateIsDepositing(observation);
+        ObservationStateChecks.checkStateIsPriorityDepositing(observation);
         StateChecks.checkStateIsUndeposited(imageCube1);
         StateChecks.checkStateIsUndeposited(imageCube2);
 
@@ -136,7 +140,7 @@ public class ObservationDepositingRecoveryTest
         imageCube2.setDepositState(depositStateFactory.createState(DepositState.Type.DEPOSITED, imageCube2));
 
         // Progress again - imageCube2 will be progressed to Deposited and the obs is still depositing
-        ObservationStateChecks.checkStateIsDepositing(observation);
+        ObservationStateChecks.checkStateIsPriorityDepositing(observation);
         StateChecks.checkStateIsFailed(imageCube1);
         StateChecks.checkStateIsDeposited(imageCube2);
 
@@ -149,7 +153,7 @@ public class ObservationDepositingRecoveryTest
 
         // Now recover it
         observation.recoverDeposit();
-        ObservationStateChecks.checkStateIsDepositing(observation);
+        ObservationStateChecks.checkStateIsPriorityDepositing(observation);
         StateChecks.checkStateIsProcessing(imageCube1);
         StateChecks.checkStateIsDeposited(imageCube2);
     }
@@ -172,7 +176,7 @@ public class ObservationDepositingRecoveryTest
         StateChecks.checkStateIsUndeposited(imageCube2);
 
         observation.progressDeposit();
-        ObservationStateChecks.checkStateIsDepositing(observation);
+        ObservationStateChecks.checkStateIsPriorityDepositing(observation);
         StateChecks.checkStateIsUndeposited(imageCube1);
         StateChecks.checkStateIsUndeposited(imageCube2);
 
@@ -187,12 +191,13 @@ public class ObservationDepositingRecoveryTest
         // Simulate staging on the other
         imageCube2.setDepositState(depositStateFactory.createState(DepositState.Type.STAGING, imageCube2));
 
-        ObservationStateChecks.checkStateIsDepositing(observation);
+        ObservationStateChecks.checkStateIsPriorityDepositing(observation);
         StateChecks.checkStateIsFailed(imageCube1);
         StateChecks.checkStateIsStaging(imageCube2);
 
         exception.expect(IllegalEventException.class);
-        exception.expectMessage("State 'DEPOSITING' for depositable 'Observation' does not respond to event 'recover'");
+        exception.expectMessage("State 'PRIORITY_DEPOSITING' for depositable 'Observation' "
+        		+ "does not respond to event 'recover'");
 
         // Attempting to recover before the observation has failed will throw an exception
         observation.recoverDeposit();
