@@ -45,10 +45,13 @@ targetCompatibility = 1.8
 repositories {
     mavenLocal() // Required when we use locally-built versions of CSIRO projects
     mavenCentral()
-    maven { url "http://jenkins-apps.it.csiro.au:8081/nexus/content/repositories/cd/" }
-    maven { url "http://jenkins-apps.it.csiro.au:8081/nexus/content/repositories/releases/" }
-    maven { url "http://jenkins-apps.it.csiro.au:8081/nexus/content/repositories/thirdparty/" }
-    maven { url "http://download.osgeo.org/webdav/geotools" }
+    ivy {
+        url 'https://github.com/csiro-rds/casda_deposit_manager/raw/master/'
+        layout ('pattern') {
+            artifact 'lib/[artifact]-[revision](-[classifier])(.[ext])'
+        }
+    }
+    maven { url "http://www.hibernatespatial.org/repository" }
     jcenter()
 }
 
@@ -76,6 +79,21 @@ dependencies
     compile("org.springframework.boot:spring-boot-starter-data-jpa:${springBootVer}")
     compile("org.springframework.boot:spring-boot-starter-ws:${springBootVer}") 
     compile("org.springframework.boot:spring-boot-starter-security:${springBootVer}")
+
+    compile("org.apache.commons:commons-lang3:3.3.2")    
+    compile("org.apache.httpcomponents:httpclient:4.5.1")
+    compile("org.apache.commons:commons-collections4:4.0")
+    compile "org.apache.logging.log4j:log4j-slf4j-impl:2.1"
+    compile "org.apache.logging.log4j:log4j-core:2.1"
+    compile "org.hibernate:hibernate-core:4.3.10.Final"
+    // for date time with time zone information
+    compile "joda-time:joda-time:2.8.2"
+    // for using joda's date time with hibernate
+    compile "org.jadira.usertype:usertype.core:4.0.0.GA"
+    // for using PGobject, for our implementation of spoly
+    //compile "org.postgresql:postgresql:9.3-1103-jdbc41"
+
+    compile("org.antlr:stringtemplate:4.0.2")
 
 	compile group: 'javax.el', name: 'javax.el-api', version: '2.2.5'
 	
