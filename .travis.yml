@@ -3,4 +3,5 @@ jdk:
   - oraclejdk8
   
 after_failure:
-  - cat build/test-results/TEST-au.csiro.casda.deposit.jpa.ObservationProjectQualityFlagRepositoryTest.xml
+  - cat build/test-results/TEST-au.csiro.casda.deposit.state.Level7ArchivingDepositStateTest.xml
+  - cat build/test-results/TEST-au.csiro.casda.deposit.state.ObservationArchivingDepositStateTest.xml
