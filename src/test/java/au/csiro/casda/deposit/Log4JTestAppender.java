@@ -254,7 +254,7 @@ public final class Log4JTestAppender implements Appender
         {
             logEvent = this.events.remove(0);
         }
-        assertThat(logEvent, notNullValue());
+        assertThat("No log entry found", logEvent, notNullValue());
         assertThat(logEvent.getLevel(), is(level));
         assertThat(logEvent.getMessage().getFormattedMessage(), messageMatcher);
         assertThat((T) logEvent.getThrown(), exceptionMatcher);

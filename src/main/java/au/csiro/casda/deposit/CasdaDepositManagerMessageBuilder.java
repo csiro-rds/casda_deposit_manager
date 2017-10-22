@@ -30,7 +30,7 @@ import au.csiro.util.TimeConversion;
 /**
  * CasdaMessageBuilder implementation for Data Deposit messages. Expands on CasdaMessageBuilder by allowing for the
  * additional of a set of optional 'field' values in the message output, eg: invoking {@link #addSource(DataLocation)}
- * will result in the message containing a "[source: <some DataLocation>]". These optional fields are added to the end
+ * will result in the message containing a "[source: &lt;some DataLocation&gt;]". These optional fields are added to the end
  * of the message in the following order:
  * <ol>
  * <li>startTime</li>

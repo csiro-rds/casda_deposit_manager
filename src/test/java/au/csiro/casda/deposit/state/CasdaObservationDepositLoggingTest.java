@@ -163,6 +163,47 @@ public class CasdaObservationDepositLoggingTest
                 matchesPattern(".*\\[fileId: observations-" + observation.getSbid() + "\\].*")),
                 sameInstance((Throwable) null));
     }
+    
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testObservationTransitionedFromPriorityToDepositing() throws ServiceCallException
+    {
+        long fileSizeInKbytes = RandomUtils.nextLong(1, 1000000);
+        NgasService.Status ngasStatus = mock(NgasService.Status.class);
+        doReturn(ngasStatus).when(ngasService).getStatus(Mockito.anyString());
+        doReturn(fileSizeInKbytes * FileUtils.ONE_KB).when(ngasStatus).getUncompressedFileSizeBytes();
+
+        Type initialDepositStateType = DepositState.Type.PRIORITY_DEPOSITING;
+        Observation observation = createObservationDepositableWithState(initialDepositStateType);
+
+        DepositState.Type nextDepositStateType = DepositState.Type.DEPOSITING;
+        DepositState.Type lastDepositStateType = DepositState.Type.DEPOSITED;
+        DepositState nextDepositState = mock(DepositState.class);
+        DepositState lastDepositState = mock(DepositState.class);
+        when(nextDepositState.getType()).thenReturn(nextDepositStateType);
+        when(lastDepositState.getType()).thenReturn(lastDepositStateType);
+
+        for (DepositableArtefact depositableArtefact : observation.getDepositableArtefacts())
+        {
+            depositableArtefact.setDepositStateChangeListener(depositStateChangeListener);
+            depositableArtefact.setDepositState(lastDepositState);
+        }
+        observation.setDepositStateChangeListener(depositStateChangeListener);
+        observation.setDepositState(nextDepositState);
+        
+        String logMessage;
+        logMessage =
+                DepositManagerEvents.E050.messageBuilder().add("observation.xml").add(observation.getSbid())
+                .add(lastDepositStateType.name()).toString();
+        testAppender.verifyLogMessage(Level.INFO, Matchers.allOf(containsString(logMessage),
+                matchesPattern(".*\\[startTime: .*\\].*"), matchesPattern(".*\\[endTime: .*\\].*"),
+                matchesPattern(".*\\[source: RTC\\].*"), matchesPattern(".*\\[destination: ARCHIVE\\].*"),
+                matchesPattern(".*\\[volumeKB: " + fileSizeInKbytes + "\\].*"),
+                matchesPattern(".*\\[fileId: observations-" + observation.getSbid() + "-observation.xml\\].*")),
+                sameInstance((Throwable) null));
+        testAppender.verifyLogMessage(Level.INFO, DepositManagerEvents.E075.messageBuilder().add(observation.getSbid())
+                .add(nextDepositStateType.name()).toString());
+    }
 
     @Test
     public void testFailedObservation()

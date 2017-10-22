@@ -44,6 +44,9 @@ public class DepositManagerServiceRtcPollingTest
     private ObservationsJobsHandler observationsJobsHandler;
 
     @Mock
+    private ObservationRefreshHandler observationRefreshHandler;
+
+    @Mock
     private ObservationRepository observationRepository;
 
     @Mock
@@ -67,9 +70,9 @@ public class DepositManagerServiceRtcPollingTest
     {
         long timeExpiresValue = 500L;
 
-        DepositManagerService depositManagerService =
-                spy(new DepositManagerService(progressor, observationRepository, observationsJobsHandler,
-                        casdaDepositStatusProgressMonitor, DATA_DEPOSIT_TEST_ROOTDIR, timeExpiresValue));
+        DepositManagerService depositManagerService = spy(new DepositManagerService(progressor, observationRepository,
+                observationsJobsHandler, observationRefreshHandler, casdaDepositStatusProgressMonitor,
+                DATA_DEPOSIT_TEST_ROOTDIR, timeExpiresValue));
 
         Exception theException = new PollingException("Mock ImportException");
         doThrow(theException).when(observationsJobsHandler).run(DATA_DEPOSIT_TEST_ROOTDIR);
@@ -118,9 +121,9 @@ public class DepositManagerServiceRtcPollingTest
     @Test
     public void testPollRtcSuccessfulLogging() throws Exception
     {
-        DepositManagerService depositManagerService =
-                spy(new DepositManagerService(progressor, observationRepository, observationsJobsHandler,
-                        casdaDepositStatusProgressMonitor, DATA_DEPOSIT_TEST_ROOTDIR, 20000L));
+        DepositManagerService depositManagerService = spy(new DepositManagerService(progressor, observationRepository,
+                observationsJobsHandler, observationRefreshHandler, casdaDepositStatusProgressMonitor,
+                DATA_DEPOSIT_TEST_ROOTDIR, 20000L));
 
         depositManagerService.pollRtc();
 

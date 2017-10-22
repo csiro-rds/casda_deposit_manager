@@ -32,6 +32,7 @@ public class ObservationStateChecks
     public static void checkStateIsInitial(CasdaDepositableEntity depositableArtefact)
     {
         assertThat(depositableArtefact.isNewDeposit(), is(true));
+        assertThat(depositableArtefact.isPriorityDepositing(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(depositableArtefact.isDeposited(), is(false));
         assertThat(depositableArtefact.isFailedDeposit(), is(false));
@@ -51,7 +52,23 @@ public class ObservationStateChecks
     public static void checkStateIsDepositing(CasdaDepositableEntity depositableArtefact)
     {
         assertThat(depositableArtefact.isNewDeposit(), is(false));
+        assertThat(depositableArtefact.isPriorityDepositing(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(true));
+        assertThat(depositableArtefact.isDeposited(), is(false));
+        assertThat(depositableArtefact.isFailedDeposit(), is(false));
+    }
+    
+    /**
+     * Check is in priority depositing state
+     * 
+     * @param depositableArtefact
+     *            to check state of
+     * */
+    public static void checkStateIsPriorityDepositing(CasdaDepositableEntity depositableArtefact)
+    {
+        assertThat(depositableArtefact.isNewDeposit(), is(false));
+        assertThat(depositableArtefact.isPriorityDepositing(), is(true));
+        assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(depositableArtefact.isDeposited(), is(false));
         assertThat(depositableArtefact.isFailedDeposit(), is(false));
     }
@@ -65,6 +82,7 @@ public class ObservationStateChecks
     public static void checkStateIsDeposited(CasdaDepositableEntity depositableArtefact)
     {
         assertThat(depositableArtefact.isNewDeposit(), is(false));
+        assertThat(depositableArtefact.isPriorityDepositing(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(depositableArtefact.isDeposited(), is(true));
         assertThat(depositableArtefact.isFailedDeposit(), is(false));
@@ -79,6 +97,7 @@ public class ObservationStateChecks
     public static void checkStateIsFailed(CasdaDepositableEntity depositableArtefact)
     {
         assertThat(depositableArtefact.isNewDeposit(), is(false));
+        assertThat(depositableArtefact.isPriorityDepositing(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(depositableArtefact.isDeposited(), is(false));
         assertThat(depositableArtefact.isFailedDeposit(), is(true));
@@ -93,6 +112,7 @@ public class ObservationStateChecks
     public static void checkStateIsNotifying(CasdaDepositableEntity depositableArtefact)
     {
         assertThat(depositableArtefact.isNewDeposit(), is(false));
+        assertThat(depositableArtefact.isPriorityDepositing(), is(false));
         assertThat(depositableArtefact.isDepositing(), is(false));
         assertThat(((Observation) depositableArtefact).isNotifying(), is(true));
         assertThat(depositableArtefact.isDeposited(), is(false));

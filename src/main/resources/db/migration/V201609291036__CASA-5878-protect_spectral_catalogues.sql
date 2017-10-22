@@ -1,0 +1,2 @@
+update casda.tap_tables set release_required = 'TRUE' where table_name = 'casda.spectral_line_absorption';
+update casda.tap_tables set release_required = 'TRUE' where table_name = 'casda.spectral_line_emission';

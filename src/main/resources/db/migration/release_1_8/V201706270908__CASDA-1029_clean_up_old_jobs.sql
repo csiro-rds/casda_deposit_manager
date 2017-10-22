@@ -1,0 +1,1 @@
+UPDATE casda.data_access_job SET status = 'EXPIRED' WHERE status = 'READY' AND expired_timestamp < current_date;

@@ -22,10 +22,13 @@ import org.joda.time.DateTime;
 
 import au.csiro.casda.entity.ValidationNote;
 import au.csiro.casda.entity.observation.Catalogue;
+import au.csiro.casda.entity.observation.Cubelet;
 import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.MeasurementSet;
+import au.csiro.casda.entity.observation.MomentMap;
 import au.csiro.casda.entity.observation.Observation;
 import au.csiro.casda.entity.observation.Project;
+import au.csiro.casda.entity.observation.Spectrum;
 
 /**
  * Details about data products for an observation and project combination, for transfer to casda rules.
@@ -130,6 +133,42 @@ public class ObservationProjectDataProductsDTO implements Serializable
                     project = imageCube.getProject();
                 }
                 dataProducts.add(new DataProductDTO(imageCube));
+            }
+        }
+
+        for (Spectrum spectrum : observation.getSpectra())
+        {
+            if (opalCode.equals(spectrum.getProject().getOpalCode()))
+            {
+                if (project == null)
+                {
+                    project = spectrum.getProject();
+                }
+                dataProducts.add(new DataProductDTO(spectrum));
+            }
+        }
+
+        for (MomentMap momentMap : observation.getMomentMaps())
+        {
+            if (opalCode.equals(momentMap.getProject().getOpalCode()))
+            {
+                if (project == null)
+                {
+                    project = momentMap.getProject();
+                }
+                dataProducts.add(new DataProductDTO(momentMap));
+            }
+        }
+        
+        for (Cubelet cubelet : observation.getCubelets())
+        {
+            if (opalCode.equals(cubelet.getProject().getOpalCode()))
+            {
+                if (project == null)
+                {
+                    project = cubelet.getProject();
+                }
+                dataProducts.add(new DataProductDTO(cubelet));
             }
         }
 

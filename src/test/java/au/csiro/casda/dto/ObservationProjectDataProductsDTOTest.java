@@ -17,6 +17,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -38,10 +39,13 @@ import au.csiro.casda.dto.DataProductDTO.QualityLevel;
 import au.csiro.casda.entity.ValidationNote;
 import au.csiro.casda.entity.observation.Catalogue;
 import au.csiro.casda.entity.observation.CatalogueType;
+import au.csiro.casda.entity.observation.Cubelet;
 import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.MeasurementSet;
+import au.csiro.casda.entity.observation.MomentMap;
 import au.csiro.casda.entity.observation.Observation;
 import au.csiro.casda.entity.observation.Project;
+import au.csiro.casda.entity.observation.Spectrum;
 
 /**
  * Tests JSON serialisation and deserialisation of ObservationProjectDataProductsDTO and DataProductsDTO classes
@@ -57,7 +61,7 @@ public class ObservationProjectDataProductsDTOTest extends AbstractMarshallingTe
         ObservationProjectDataProductsDTO dataProducts =
                 new ObservationProjectDataProductsDTO(12345, "ABC123", DateTime.now(), "Bob", "Smith");
         DataProductDTO dataProduct =
-                new DataProductDTO(12L, DataProductType.CATALOGUE, CatalogueType.CONTINUUM_COMPONENT, "file-id",
+                new DataProductDTO(12L, DataProductType.CATALOGUE, CatalogueType.CONTINUUM_COMPONENT.name(), "file-id",
                         QualityLevel.GOOD);
         dataProducts.getDataProducts().add(dataProduct);
         return dataProducts;
@@ -88,38 +92,55 @@ public class ObservationProjectDataProductsDTOTest extends AbstractMarshallingTe
         catalogue.setId(12L);
         catalogue.setProject(project);
         doReturn("catalogue-file-id").when(catalogue).getFileId();
-        Catalogue catalogue2 = new Catalogue(CatalogueType.CONTINUUM_ISLAND);
-        catalogue2.setId(14L);
-        catalogue2.setProject(project2);
         List<Catalogue> catalogues = new ArrayList<>();
         catalogues.add(catalogue);
-        catalogues.add(catalogue2);
 
         MeasurementSet measurementSet = spy(new MeasurementSet());
         measurementSet.setId(16L);
         measurementSet.setProject(project);
         doReturn("measurementset-file-id").when(measurementSet).getFileId();
-        MeasurementSet measurementSet2 = new MeasurementSet();
-        measurementSet2.setId(17L);
-        measurementSet2.setProject(project2);
         List<MeasurementSet> measurementSets = new ArrayList<>();
         measurementSets.add(measurementSet);
-        measurementSets.add(measurementSet2);
 
         ImageCube imageCube = spy(new ImageCube());
         imageCube.setId(19L);
+        imageCube.setType("cont_cleanmodel_T0");
         imageCube.setProject(project);
         doReturn("imagecube-file-id").when(imageCube).getFileId();
-        ImageCube imageCube2 = new ImageCube();
-        imageCube2.setId(20L);
-        imageCube2.setProject(project2);
         List<ImageCube> imageCubes = new ArrayList<>();
         imageCubes.add(imageCube);
-        imageCubes.add(imageCube2);
 
+        Spectrum spectrum = spy(new Spectrum());
+        spectrum.setId(25L);
+        spectrum.setProject(project);
+        spectrum.setType("spectral_noise_restored");
+        doReturn("spectrum-file-id").when(spectrum).getFileId();
+        List<Spectrum> spectra = new ArrayList<>();
+        spectra.add(spectrum);
+        
+        MomentMap momentMap = spy(new MomentMap());
+        momentMap.setId(17L);
+        momentMap.setProject(project);
+        momentMap.setType("spectral_restored_mom1");
+        doReturn("moment-map-file-id").when(momentMap).getFileId();
+        List<MomentMap> momentMaps = new ArrayList<>();
+        momentMaps.add(momentMap);
+        
+        
+        Cubelet cubelet = spy(new Cubelet());
+        cubelet.setId(17L);
+        cubelet.setProject(project);
+        cubelet.setType("spectral_restored_3d");
+        doReturn("cubelet-file-id").when(cubelet).getFileId();
+        List<Cubelet> cubelets = new ArrayList<Cubelet>();
+        cubelets.add(cubelet);
+        
         when(observation.getCatalogues()).thenReturn(catalogues);
         when(observation.getMeasurementSets()).thenReturn(measurementSets);
         when(observation.getImageCubes()).thenReturn(imageCubes);
+        when(observation.getSpectra()).thenReturn(spectra);
+        when(observation.getMomentMaps()).thenReturn(momentMaps);
+        when(observation.getCubelets()).thenReturn(cubelets);
 
         List<String> qualityFlagCodes = new ArrayList<>();
         qualityFlagCodes.add("flag1");
@@ -145,35 +166,59 @@ public class ObservationProjectDataProductsDTOTest extends AbstractMarshallingTe
                 new ObservationProjectDataProductsDTO("ABC123", observation, qualityFlagCodes, validationNotes);
 
         assertEquals(now.getMillis(), dataProducts.getObsStartDateMillis().longValue());
-        assertEquals(3, dataProducts.getDataProducts().size());
+        assertEquals(6, dataProducts.getDataProducts().size());
         assertEquals("ABC123", dataProducts.getOpalCode());
         assertEquals("Bob", dataProducts.getPrincipalFirstName());
         assertEquals("Smith", dataProducts.getPrincipalLastName());
         assertEquals(2, dataProducts.getQualityFlagCodes().size());
         assertThat(dataProducts.getQualityFlagCodes(), containsInAnyOrder("flag1", "flag2"));
         assertEquals(12345, dataProducts.getSbid().intValue());
+        boolean hasSpectra = false;
+        boolean hasMomentMap = false;
+        boolean hasCubeletMap = false;
         for (DataProductDTO dataProduct : dataProducts.getDataProducts())
         {
             switch (dataProduct.getType())
             {
             case CATALOGUE:
                 assertEquals(12L, dataProduct.getId());
-                assertEquals(CatalogueType.CONTINUUM_COMPONENT, dataProduct.getCatalogueType());
+                assertEquals(CatalogueType.CONTINUUM_COMPONENT.name(), dataProduct.getSubType());
                 assertEquals(QualityLevel.NOT_VALIDATED, dataProduct.getQualityLevel());
                 assertEquals("catalogue-file-id", dataProduct.getIdentifier());
                 break;
             case MEASUREMENT_SET:
                 assertEquals(16L, dataProduct.getId());
-                assertNull(dataProduct.getCatalogueType());
+                assertNull(dataProduct.getSubType());
                 assertEquals(QualityLevel.NOT_VALIDATED, dataProduct.getQualityLevel());
                 assertEquals("measurementset-file-id", dataProduct.getIdentifier());
                 break;
             case IMAGE_CUBE:
                 assertEquals(19L, dataProduct.getId());
-                assertNull(dataProduct.getCatalogueType());
+                assertEquals("cont_cleanmodel_T0", dataProduct.getSubType());
                 assertEquals(QualityLevel.NOT_VALIDATED, dataProduct.getQualityLevel());
                 assertEquals("imagecube-file-id", dataProduct.getIdentifier());
                 break;
+            case SPECTRUM:
+                assertEquals(25L, dataProduct.getId());
+                assertEquals("spectral_noise_restored", dataProduct.getSubType());
+                assertEquals(QualityLevel.NOT_VALIDATED, dataProduct.getQualityLevel());
+                assertEquals("spectrum-file-id", dataProduct.getIdentifier());
+                hasSpectra = true;
+                break;
+            case MOMENT_MAP:
+                assertEquals(17L, dataProduct.getId());
+                assertEquals("spectral_restored_mom1", dataProduct.getSubType());
+                assertEquals(QualityLevel.NOT_VALIDATED, dataProduct.getQualityLevel());
+                assertEquals("moment-map-file-id", dataProduct.getIdentifier());
+                hasMomentMap = true;
+            	break;
+            case CUBELET:
+                assertEquals(17L, dataProduct.getId());
+                assertEquals("spectral_restored_3d", dataProduct.getSubType());
+                assertEquals(QualityLevel.NOT_VALIDATED, dataProduct.getQualityLevel());
+                assertEquals("cubelet-file-id", dataProduct.getIdentifier());
+                hasCubeletMap = true;
+            	break;
             default:
                 fail();
                 break;
@@ -182,6 +227,9 @@ public class ObservationProjectDataProductsDTOTest extends AbstractMarshallingTe
         assertEquals("Content for note 1", dataProducts.getValidationNotes().get(0).getContent());
         assertEquals("Content for note 2", dataProducts.getValidationNotes().get(1).getContent());
         assertEquals(2, dataProducts.getValidationNotes().size());
+        assertTrue("Should have spectra", hasSpectra);
+        assertTrue("Should have moment maps", hasMomentMap);
+        assertTrue("Should have cubelets", hasCubeletMap);
     }
     
 }

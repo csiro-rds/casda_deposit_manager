@@ -17,6 +17,7 @@ import au.csiro.casda.deposit.DepositManagerEvents;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.NgasService.ServiceCallException;
 import au.csiro.casda.entity.observation.Observation;
+import au.csiro.casda.entity.observation.ParentDepositableArtefact;
 import au.csiro.casda.logging.DataLocation;
 
 /*
@@ -106,9 +107,10 @@ public class CasdaObservationDepositStateChangeListener implements DepositStateC
             {
                 // Log each change in deposit status for each artefact (Event E050)
                 ChildDepositableArtefact artefact = (ChildDepositableArtefact) depositable;
+                ParentDepositableArtefact parent = artefact.getParent();
                 CasdaDepositManagerMessageBuilder messageBuilder = DepositManagerEvents.E050.messageBuilder() //
                         .add(artefact.getFilename()) //
-                        .add(artefact.getParent().getUniqueId()) //
+                        .add(parent == null ? "Unknown" : parent.getUniqueId()) //
                         .add(toStateType.name()).addFileId(artefact.getFileId());
                 if (toStateType.equals(Type.DEPOSITED))
                 {

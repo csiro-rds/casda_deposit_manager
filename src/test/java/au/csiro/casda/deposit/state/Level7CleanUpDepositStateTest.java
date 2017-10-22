@@ -79,9 +79,9 @@ public class Level7CleanUpDepositStateTest
         MockitoAnnotations.initMocks(this);
         level7CollectionParentDirectory = tempFolder.newFolder("foo");
         level7Collection = new Level7Collection(RandomUtils.nextLong(1, Long.MAX_VALUE));
-        Catalogue one = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue one = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         one.setEntriesTableName("casda.table1");
-        Catalogue two = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue two = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         two.setEntriesTableName("casda.table1");
         level7Collection.addCatalogue(one);
         level7Collection.addCatalogue(two);

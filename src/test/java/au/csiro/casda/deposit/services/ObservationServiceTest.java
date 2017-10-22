@@ -1,20 +1,5 @@
 package au.csiro.casda.deposit.services;
 
-/*
- * #%L
- * CSIRO ASKAP Science Data Archive
- * %%
- * Copyright (C) 2015 Commonwealth Scientific and Industrial Research Organisation (CSIRO) ABN 41 687 119 230.
- * %%
- * Licensed under the CSIRO Open Source License Agreement (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License in the LICENSE file.
- * #L%
- */
-
-
-import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.hamcrest.Matchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
@@ -28,6 +13,26 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import static org.hamcrest.CoreMatchers.is;
+
+/*
+ * #%L
+ * CSIRO ASKAP Science Data Archive
+ * %%
+ * Copyright (C) 2015 Commonwealth Scientific and Industrial Research Organisation (CSIRO) ABN 41 687 119 230.
+ * %%
+ * Licensed under the CSIRO Open Source License Agreement (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License in the LICENSE file.
+ * #L%
+ */
+
+
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.emptyCollectionOf;
+import static org.hamcrest.Matchers.startsWith;
 
 import java.sql.Date;
 import java.util.ArrayList;
@@ -53,6 +58,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import au.csiro.casda.BadRequestException;
 import au.csiro.casda.ResourceNotFoundException;
 import au.csiro.casda.datadeposit.DepositState.Type;
+import au.csiro.casda.deposit.jpa.ObservationRefreshRepository;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
 import au.csiro.casda.deposit.jpa.ValidationNoteRepository;
 import au.csiro.casda.dto.DataProductDTO;
@@ -69,6 +75,7 @@ import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.MeasurementSet;
 import au.csiro.casda.entity.observation.Observation;
 import au.csiro.casda.entity.observation.Project;
+import au.csiro.casda.entity.observation.Spectrum;
 import au.csiro.casda.services.dto.Message.MessageCode;
 import au.csiro.casda.services.dto.MessageDTO;
 
@@ -88,6 +95,9 @@ public class ObservationServiceTest
 
     @Mock
     private ValidationNoteRepository mockValidationNoteRepository;
+
+    @Mock
+    private ObservationRefreshRepository mockObservationRefreshRepository;
 
     @Mock
     private JdbcTemplate jdbcTemplate;
@@ -162,6 +172,44 @@ public class ObservationServiceTest
         Set<ObservationProjectDataProductsDTO> releasedObservationsWithDate =
                 observationService.getReleasedProjectBlocks("one", 123L);
         assertThat(releasedObservationsWithDate, containsInAnyOrder(one, three));
+    }
+
+    @Test
+    public void testGetRefreshedProjectBlocksDate()
+    {
+        ObservationProjectDataProductsDTO projBlock =
+                new ObservationProjectDataProductsDTO(142, "A123", DateTime.now(), "Bob", "Smith");
+        List<Long> obsIds = Arrays.asList(new Long[] {1L, 3L, 5L});
+
+        Long date = 123L;
+        DateTime recentDateTime = new DateTime(date, DateTimeZone.UTC);
+        DateTime earlyDateTime = new DateTime(100L, DateTimeZone.UTC);
+        DateTime defaultDateTime = new DateTime(0L, DateTimeZone.UTC);
+
+        when(mockObservationRefreshRepository.getIdsOfObservationsRefreshedSince(eq(recentDateTime)))
+                .thenReturn(new ArrayList<>());
+        when(mockObservationRefreshRepository.getIdsOfObservationsRefreshedSince(eq(earlyDateTime)))
+                .thenReturn(obsIds);
+        when(mockObservationRefreshRepository.getIdsOfObservationsRefreshedSince(eq(defaultDateTime)))
+                .thenReturn(obsIds);
+        when(mockObservationRepository.findProjectBlocksWithImageCubes(eq(obsIds))).thenReturn(new ArrayList<>());
+        when(mockObservationRepository.findProjectBlocksWithSpectra(eq(obsIds))).thenReturn(Arrays.asList(projBlock));
+        when(mockObservationRepository.findProjectBlocksWithMomentMaps(eq(obsIds)))
+                .thenReturn(Arrays.asList(projBlock));
+        when(mockObservationRepository.findProjectBlocksWithCubelets(eq(obsIds)))
+        .thenReturn(Arrays.asList(projBlock));
+
+        Set<ObservationProjectDataProductsDTO> releasedObservationsRecentDate =
+                observationService.getRefreshedProjectBlocks(recentDateTime.getMillis());
+        assertThat(releasedObservationsRecentDate, is(emptyCollectionOf(ObservationProjectDataProductsDTO.class)));
+
+        Set<ObservationProjectDataProductsDTO> releasedObservationsEarlyDate =
+                observationService.getRefreshedProjectBlocks(earlyDateTime.getMillis());
+        assertThat(releasedObservationsEarlyDate, containsInAnyOrder(projBlock));
+
+        Set<ObservationProjectDataProductsDTO> releasedObservationsDefaultDate =
+                observationService.getRefreshedProjectBlocks(null);
+        assertThat(releasedObservationsDefaultDate, containsInAnyOrder(projBlock));
     }
 
     @Test(expected = ResourceNotFoundException.class)
@@ -261,6 +309,8 @@ public class ObservationServiceTest
         Observation observation = spy(new Observation());
         when(observation.getSbid()).thenReturn(123);
         when(observation.getDepositStateType()).thenReturn(Type.DEPOSITED);
+        
+        DateTime preExistingReleaseDate = DateTime.now(DateTimeZone.UTC).minusHours(8);
 
         Project project = new Project("ABC123");
         Project project2 = new Project("ABC111");
@@ -268,6 +318,7 @@ public class ObservationServiceTest
         catalogue.setId(122L);
         catalogue.setProject(project);
         catalogue.setQualityLevel(au.csiro.casda.entity.observation.QualityLevel.GOOD);
+        catalogue.setReleasedDate(preExistingReleaseDate);
         Catalogue catalogue2 = new Catalogue(CatalogueType.CONTINUUM_ISLAND);
         catalogue2.setId(124L);
         catalogue2.setQualityLevel(au.csiro.casda.entity.observation.QualityLevel.NOT_VALIDATED);
@@ -282,6 +333,7 @@ public class ObservationServiceTest
 
         MeasurementSet measurementSet = new MeasurementSet(project);
         measurementSet.setQualityLevel(au.csiro.casda.entity.observation.QualityLevel.GOOD);
+        measurementSet.setReleasedDate(preExistingReleaseDate);
         MeasurementSet measurementSet2 = new MeasurementSet(project2);
         measurementSet2.setQualityLevel(au.csiro.casda.entity.observation.QualityLevel.NOT_VALIDATED);
         MeasurementSet measurementSet3 = new MeasurementSet(project);
@@ -292,6 +344,7 @@ public class ObservationServiceTest
 
         ImageCube imageCube = new ImageCube(project);
         imageCube.setQualityLevel(au.csiro.casda.entity.observation.QualityLevel.GOOD);
+        imageCube.setReleasedDate(preExistingReleaseDate);
         ImageCube imageCube2 = new ImageCube(project2);
         imageCube2.setQualityLevel(au.csiro.casda.entity.observation.QualityLevel.NOT_VALIDATED);
         ImageCube imageCube3 = new ImageCube(project);
@@ -303,19 +356,19 @@ public class ObservationServiceTest
         DateTime releaseDate = DateTime.now(DateTimeZone.UTC).minusHours(2);
         when(mockObservationRepository.findBySbid(Integer.valueOf(123))).thenReturn(observation);
         MessageDTO result = observationService.releaseProjectBlock("ABC123", Integer.valueOf(123), releaseDate);
-        assertEquals(releaseDate, catalogue.getReleasedDate());
+        assertEquals(preExistingReleaseDate, catalogue.getReleasedDate());
         assertNull(catalogue2.getReleasedDate());
         assertEquals(releaseDate, catalogue3.getReleasedDate());
-        assertEquals(releaseDate, imageCube.getReleasedDate());
+        assertEquals(preExistingReleaseDate, imageCube.getReleasedDate());
         assertNull(imageCube2.getReleasedDate());
         assertEquals(releaseDate, imageCube3.getReleasedDate());
-        assertEquals(releaseDate, measurementSet.getReleasedDate());
+        assertEquals(preExistingReleaseDate, measurementSet.getReleasedDate());
         assertNull(measurementSet2.getReleasedDate());
         assertEquals(releaseDate, measurementSet3.getReleasedDate());
 
         ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Long> idCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(jdbcTemplate, times(2)).update(queryCaptor.capture(), eq(releaseDate.toDate()), any(Date.class),
+        verify(jdbcTemplate, times(1)).update(queryCaptor.capture(), eq(releaseDate.toDate()), any(Date.class),
                 idCaptor.capture());
 
         for (int i = 0; i < idCaptor.getAllValues().size(); i++)
@@ -432,7 +485,7 @@ public class ObservationServiceTest
         validationNoteOne.setId(12L);
         validationNoteOne.setPersonId("person123");
         validationNoteOne.setPersonName("Person Name");
-        validationNoteOne.setProjectId(12L);
+        validationNoteOne.setProject(project);
         validationNoteOne.setSbid(12345);
 
         when(mockValidationNoteRepository.findBySbidAndProjectIdOrderByCreatedAsc(12345, 12L)).thenReturn(
@@ -462,7 +515,7 @@ public class ObservationServiceTest
         DataProductDTO dataProduct = dataProducts.getDataProducts().get(0);
         assertEquals(DataProductType.CATALOGUE, dataProduct.getType());
         assertEquals(12L, dataProduct.getId());
-        assertEquals(CatalogueType.CONTINUUM_COMPONENT, dataProduct.getCatalogueType());
+        assertEquals(CatalogueType.CONTINUUM_COMPONENT.name(), dataProduct.getSubType());
         assertEquals(QualityLevel.NOT_VALIDATED, dataProduct.getQualityLevel());
         assertEquals("catalogue-file-id", dataProduct.getIdentifier());
         assertThat(dataProducts.getQualityFlagCodes(), containsInAnyOrder("a", "b", "c"));
@@ -656,13 +709,13 @@ public class ObservationServiceTest
         details.addQualityFlagCode("PIQ");
         details.addQualityFlagCode("AB");
 
-        DataProductDTO measurementSetA =
+        DataProductDTO imageCubeA =
                 new DataProductDTO(18L, DataProductType.IMAGE_CUBE, null, "image-cube-file-id", QualityLevel.BAD);
-        DataProductDTO measurementSetB =
+        DataProductDTO imageCubeB =
                 new DataProductDTO(19L, DataProductType.IMAGE_CUBE, null, "image-cube-file-id", QualityLevel.UNCERTAIN);
 
-        details.addDataProduct(measurementSetA);
-        details.addDataProduct(measurementSetB);
+        details.addDataProduct(imageCubeA);
+        details.addDataProduct(imageCubeB);
 
         when(mockObservationRepository.findBySbid(445)).thenReturn(observation);
         observationService.updateObservationProjectDataProducts(details);
@@ -675,6 +728,54 @@ public class ObservationServiceTest
         assertEquals(au.csiro.casda.entity.observation.QualityLevel.BAD, imageCube.getQualityLevel());
         assertEquals(au.csiro.casda.entity.observation.QualityLevel.UNCERTAIN, imageCube2.getQualityLevel());
         assertEquals(au.csiro.casda.entity.observation.QualityLevel.NOT_VALIDATED, imageCube3.getQualityLevel());
+    }
+
+    @Test
+    public void testUpdateObservationProjectDataProductsMatchingSpectrum() throws Exception
+    {
+        Observation observation = spy(new Observation());
+        observation.setSbid(445);
+        observation.setId(182L);
+        Set<Project> projects = new HashSet<>();
+        Project project = new Project("ABC123");
+        project.setId(167L);
+        projects.add(project);
+        when(observation.getProjects()).thenReturn(projects);
+        Spectrum spectrum = new Spectrum();
+        spectrum.setId(18L);
+        Spectrum spectrum2 = new Spectrum();
+        spectrum2.setId(19L);
+        Spectrum spectrum3 = new Spectrum();
+        spectrum3.setId(20L);
+        observation.addSpectra(spectrum);
+        observation.addSpectra(spectrum2);
+        observation.addSpectra(spectrum3);
+
+        ObservationProjectDataProductsDTO details =
+                new ObservationProjectDataProductsDTO(445, "ABC123", DateTime.now(DateTimeZone.UTC), "Bob", "Smith");
+
+        details.addQualityFlagCode("PIQ");
+        details.addQualityFlagCode("AB");
+
+        DataProductDTO spectrumA =
+                new DataProductDTO(18L, DataProductType.SPECTRUM, null, "spectrum-file-id", QualityLevel.BAD);
+        DataProductDTO spectrumB =
+                new DataProductDTO(19L, DataProductType.SPECTRUM, null, "spectrum-file-id", QualityLevel.UNCERTAIN);
+
+        details.addDataProduct(spectrumA);
+        details.addDataProduct(spectrumB);
+
+        when(mockObservationRepository.findBySbid(445)).thenReturn(observation);
+        observationService.updateObservationProjectDataProducts(details);
+
+        verify(mockQualityService, never()).updateQualityLevelForCatalogueRows(any(DataProductDTO.class));
+        verify(mockQualityService).updateQualityFlagsForObservationProject(eq(182L), eq(167L),
+                eq(details.getQualityFlagCodes()));
+        verify(mockObservationRepository).save(eq(observation));
+
+        assertEquals(au.csiro.casda.entity.observation.QualityLevel.BAD, spectrum.getQualityLevel());
+        assertEquals(au.csiro.casda.entity.observation.QualityLevel.UNCERTAIN, spectrum2.getQualityLevel());
+        assertEquals(au.csiro.casda.entity.observation.QualityLevel.NOT_VALIDATED, spectrum3.getQualityLevel());
     }
 
     @Test
@@ -704,13 +805,13 @@ public class ObservationServiceTest
         details.addQualityFlagCode("AB");
 
         DataProductDTO measurementSetA =
-                new DataProductDTO(18L, DataProductType.CATALOGUE, CatalogueType.CONTINUUM_COMPONENT,
+                new DataProductDTO(18L, DataProductType.CATALOGUE, CatalogueType.CONTINUUM_COMPONENT.name(),
                         "catalogue-file-id", QualityLevel.GOOD);
         DataProductDTO measurementSetB =
-                new DataProductDTO(19L, DataProductType.CATALOGUE, CatalogueType.POLARISATION_COMPONENT,
+                new DataProductDTO(19L, DataProductType.CATALOGUE, CatalogueType.POLARISATION_COMPONENT.name(),
                         "catalogue-file-id", QualityLevel.BAD);
         DataProductDTO measurementSetC =
-                new DataProductDTO(20L, DataProductType.CATALOGUE, CatalogueType.SPECTRAL_LINE_ABSORPTION, 
+                new DataProductDTO(20L, DataProductType.CATALOGUE, CatalogueType.SPECTRAL_LINE_ABSORPTION.name(), 
                 		"catalogue-file-id", QualityLevel.UNCERTAIN);
 
         details.addDataProduct(measurementSetA);
@@ -749,9 +850,12 @@ public class ObservationServiceTest
         measurementSet.setId(19L);
         ImageCube imageCube = new ImageCube();
         imageCube.setId(20L);
+        Spectrum spectrum = new Spectrum();
+        spectrum.setId(30L);
         observation.addCatalogue(catalogue);
         observation.addMeasurementSet(measurementSet);
         observation.addImageCube(imageCube);
+        observation.addSpectra(spectrum);
 
         ObservationProjectDataProductsDTO details =
                 new ObservationProjectDataProductsDTO(445, "ABC123", DateTime.now(DateTimeZone.UTC), "Bob", "Smith");
@@ -762,13 +866,16 @@ public class ObservationServiceTest
         DataProductDTO measurementSetA =
                 new DataProductDTO(19L, DataProductType.MEASUREMENT_SET, null, "catalogue-file-id", QualityLevel.GOOD);
         DataProductDTO catalogueA =
-                new DataProductDTO(18L, DataProductType.CATALOGUE, CatalogueType.POLARISATION_COMPONENT,
+                new DataProductDTO(18L, DataProductType.CATALOGUE, CatalogueType.POLARISATION_COMPONENT.name(),
                         "catalogue-file-id", QualityLevel.BAD);
         DataProductDTO imageCubeA =
                 new DataProductDTO(20L, DataProductType.IMAGE_CUBE, null, "catalogue-file-id", QualityLevel.UNCERTAIN);
+        DataProductDTO spectrumA =
+                new DataProductDTO(30L, DataProductType.SPECTRUM, null, "spectrum-file-id", QualityLevel.GOOD);
         details.addDataProduct(measurementSetA);
         details.addDataProduct(catalogueA);
         details.addDataProduct(imageCubeA);
+        details.addDataProduct(spectrumA);
 
         when(mockObservationRepository.findBySbid(445)).thenReturn(observation);
         observationService.updateObservationProjectDataProducts(details);
@@ -781,6 +888,7 @@ public class ObservationServiceTest
         assertEquals(au.csiro.casda.entity.observation.QualityLevel.BAD, catalogue.getQualityLevel());
         assertEquals(au.csiro.casda.entity.observation.QualityLevel.GOOD, measurementSet.getQualityLevel());
         assertEquals(au.csiro.casda.entity.observation.QualityLevel.UNCERTAIN, imageCube.getQualityLevel());
+        assertEquals(au.csiro.casda.entity.observation.QualityLevel.GOOD, spectrum.getQualityLevel());
     }
 
     @Test(expected = ResourceNotFoundException.class)
@@ -845,7 +953,7 @@ public class ObservationServiceTest
         assertEquals(validationNoteDto.getContent(), savedNote.getContent());
         assertEquals(validationNoteDto.getUserId(), savedNote.getPersonId());
         assertEquals(validationNoteDto.getUserName(), savedNote.getPersonName());
-        assertEquals(167L, savedNote.getProjectId().longValue());
+        assertEquals(167L, savedNote.getProject().getId().longValue());
         assertEquals(445, savedNote.getSbid().intValue());
         assertEquals(validationNoteDto.getCreatedDate().longValue(), savedNote.getCreated().getMillis());
     }
@@ -888,11 +996,31 @@ public class ObservationServiceTest
         assertEquals(validationNoteDto.getContent(), savedNote.getContent());
         assertEquals(validationNoteDto.getUserId(), savedNote.getPersonId());
         assertEquals(validationNoteDto.getUserName(), savedNote.getPersonName());
-        assertEquals(167L, savedNote.getProjectId().longValue());
+        assertEquals(167L, savedNote.getProject().getId().longValue());
         assertEquals(445, savedNote.getSbid().intValue());
         // the validation note didn't have the created time set, so make sure it was set to about now
         assertEquals(System.currentTimeMillis(), savedNote.getCreated().getMillis(), 100);
         assertEquals(response.getContent(), savedNote.getContent());
         assertEquals(newNoteId, savedNote.getId().longValue());
+    }
+    
+    @Test
+    public void testGetInvalidObservationIds()
+    {
+        List<String> copyOfList = observationService.getInvalidObservationIds();
+        assertThat(copyOfList, emptyCollectionOf(String.class));
+        copyOfList.add("Ghost entry");
+        assertThat(observationService.getInvalidObservationIds(), emptyCollectionOf(String.class));
+        
+        observationService.addInvalidObservation("1024");
+        copyOfList = observationService.getInvalidObservationIds();
+        assertThat(copyOfList, contains("1024"));
+        observationService.addInvalidObservation("1026");
+        assertThat(copyOfList, contains("1024"));
+        copyOfList = observationService.getInvalidObservationIds();
+        assertThat(copyOfList, contains("1024", "1026"));
+
+        observationService.clearInvalidObservationIds();
+        assertThat(observationService.getInvalidObservationIds(), emptyCollectionOf(String.class));
     }
 }

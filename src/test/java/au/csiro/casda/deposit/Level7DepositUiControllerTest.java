@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.servlet.http.HttpServletRequest;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -70,6 +72,9 @@ public class Level7DepositUiControllerTest
 
     @Mock
     private FlashHelper flashHelper;
+    
+    @Mock
+    private HttpServletRequest httpServletRequest;
 
     /**
      * Set up the ui controller before each test.
@@ -81,6 +86,7 @@ public class Level7DepositUiControllerTest
     public void setUp() throws Exception
     {
         MockitoAnnotations.initMocks(this);
+        when(httpServletRequest.getRequestURL()).thenReturn(new StringBuffer("localhost:8080/hello/"));
     }
 
     @SuppressWarnings("unchecked")
@@ -92,7 +98,7 @@ public class Level7DepositUiControllerTest
         when(level7CollectionService.findLevel7CollectionsByDepositStateType(any(EnumSet.class))).thenReturn(
                 new ArrayList<>());
 
-        String newPage = controller.level7CollectionDepositStatus(model);
+        String newPage = controller.level7CollectionDepositStatus(httpServletRequest, model);
         assertEquals(Level7DepositUiController.LEVEL7_DEPOSIT_STATUS_PAGE, newPage);
     }
 
@@ -106,25 +112,27 @@ public class Level7DepositUiControllerTest
                 new ArrayList<>());
         when(level7CollectionService.findRecentlyCompletedLevel7Collections()).thenReturn(new ArrayList<>());
 
-        String newPage = controller.level7CollectionDepositStatus(model);
+        String newPage = controller.level7CollectionDepositStatus(httpServletRequest, model);
         assertEquals(Level7DepositUiController.LEVEL7_DEPOSIT_STATUS_PAGE, newPage);
 
         Set<String> expectedModelKeys =
-                new HashSet<>(Arrays.asList(Level7DepositUiController.DEPOSITING_LEVEL7_COLLECTIONS_MODEL_KEY,
-                        Level7DepositUiController.DEPOSITED_LEVEL7_COLLECTIONS_MODEL_KEY,
-                        Level7DepositUiController.FAILED_LEVEL7_COLLECTIONS_MODEL_KEY,
-                        Level7DepositUiController.FAILED_LEVEL7_COLLECTION_DEPOSITABLES_MODEL_KEY,
-                        Level7DepositUiController.DEPOSITED_LEVEL7_COLLECTIONS_MAX_AGE_MODEL_KEY));
+                new HashSet<>(Arrays.asList(Level7DepositUiController.DEPOSITING_PARENT_DEPOSITABLES_MODEL_KEY,
+                        Level7DepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MODEL_KEY,
+                        Level7DepositUiController.FAILED_PARENT_DEPOSITABLES_MODEL_KEY,
+                        Level7DepositUiController.FAILED_DEPOSITABLES_MODEL_KEY,
+                        Level7DepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MAX_AGE_MODEL_KEY,
+                        Level7DepositUiController.DEPOSIT_STATUS_URL,
+                        Level7DepositUiController.VALIDATING_PARENT_DEPOSITABLES_MODEL_KEY));
         assertEquals(expectedModelKeys, model.asMap().keySet());
         assertEquals(Arrays.asList(new Level7Collection[0]),
-                model.asMap().get(Level7DepositUiController.FAILED_LEVEL7_COLLECTIONS_MODEL_KEY));
+                model.asMap().get(Level7DepositUiController.FAILED_PARENT_DEPOSITABLES_MODEL_KEY));
         assertEquals(Arrays.asList(new Level7Collection[0]),
-                model.asMap().get(Level7DepositUiController.DEPOSITING_LEVEL7_COLLECTIONS_MODEL_KEY));
+                model.asMap().get(Level7DepositUiController.DEPOSITING_PARENT_DEPOSITABLES_MODEL_KEY));
         assertEquals(Arrays.asList(new Level7Collection[0]),
-                model.asMap().get(Level7DepositUiController.DEPOSITED_LEVEL7_COLLECTIONS_MODEL_KEY));
+                model.asMap().get(Level7DepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MODEL_KEY));
         Map<Integer, List<ChildDepositableArtefact>> failureMap =
                 (Map<Integer, List<ChildDepositableArtefact>>) model.asMap().get(
-                        Level7DepositUiController.FAILED_LEVEL7_COLLECTION_DEPOSITABLES_MODEL_KEY);
+                        Level7DepositUiController.FAILED_DEPOSITABLES_MODEL_KEY);
         assertTrue(failureMap.isEmpty());
 
     }
@@ -136,40 +144,40 @@ public class Level7DepositUiControllerTest
         Model model = spy(new ExtendedModelMap());
 
         Level7Collection failedLevel7Collection = new Level7Collection(22222);
-        Catalogue depositable1 = spy(new Catalogue(CatalogueType.LEVEL7));
+        Catalogue depositable1 = spy(new Catalogue(CatalogueType.DERIVED_CATALOGUE));
         depositable1.setFilename("file1.pdf");
         failedLevel7Collection.addCatalogue(depositable1);
         when(depositable1.isFailedDeposit()).thenReturn(true);
-        Catalogue depositable2 = spy(new Catalogue(CatalogueType.LEVEL7));
+        Catalogue depositable2 = spy(new Catalogue(CatalogueType.DERIVED_CATALOGUE));
         depositable2.setFilename("file2.pdf");
         when(depositable2.isFailedDeposit()).thenReturn(true);
         failedLevel7Collection.addCatalogue(depositable2);
 
         List<Level7Collection> failedLevel7List = new ArrayList<>();
         failedLevel7List.add(failedLevel7Collection);
-        when(level7CollectionService.findLevel7CollectionsByDepositStateType(DepositState.Type.FAILED)).thenReturn(
-                failedLevel7List);
+        when(level7CollectionService.findLevel7CollectionsByDepositStateType(
+        		EnumSet.of(DepositState.Type.FAILED, DepositState.Type.INVALID))).thenReturn(failedLevel7List);
 
         List<Level7Collection> activeLevel7List = new ArrayList<>();
         Level7Collection activeLevel7Collection = new Level7Collection(33333);
         activeLevel7List.add(activeLevel7Collection);
         Level7Collection failingLevel7Collection = new Level7Collection(44444);
-        Catalogue depositable3 = spy(new Catalogue(CatalogueType.LEVEL7));
+        Catalogue depositable3 = spy(new Catalogue(CatalogueType.DERIVED_CATALOGUE));
         depositable3.setFilename("file3.pdf");
         failingLevel7Collection.addCatalogue(depositable3);
         when(depositable3.isFailedDeposit()).thenReturn(true);
         activeLevel7List.add(failingLevel7Collection);
-        when(
-                level7CollectionService.findLevel7CollectionsByDepositStateType(EnumSet.of(DepositState.Type.STAGING,
-                        DepositState.Type.DEPOSITING, DepositState.Type.NOTIFYING))).thenReturn(activeLevel7List);
+        when(level7CollectionService.findLevel7CollectionsByDepositStateType(
+                EnumSet.of(DepositState.Type.STAGING, DepositState.Type.DEPOSITING, DepositState.Type.ARCHIVING,
+                        DepositState.Type.CLEANUP, DepositState.Type.NOTIFYING))).thenReturn(activeLevel7List);
 
         when(level7CollectionService.findRecentlyCompletedLevel7Collections()).thenReturn(new ArrayList<>(0));
 
-        controller.level7CollectionDepositStatus(model);
+        controller.level7CollectionDepositStatus(httpServletRequest, model);
 
         Map<Integer, List<ChildDepositableArtefact>> failureMap =
                 (Map<Integer, List<ChildDepositableArtefact>>) model.asMap().get(
-                        Level7DepositUiController.FAILED_LEVEL7_COLLECTION_DEPOSITABLES_MODEL_KEY);
+                        Level7DepositUiController.FAILED_DEPOSITABLES_MODEL_KEY);
         assertEquals(2, failureMap.keySet().size());
         assertTrue(failureMap.keySet().contains(failingLevel7Collection.getDapCollectionId()));
         assertEquals(Arrays.asList(depositable1, depositable2),
@@ -194,15 +202,15 @@ public class Level7DepositUiControllerTest
         depositingLevel7Collections.add(level7Collection1);
         depositingLevel7Collections.add(level7Collection2);
 
-        when(
-                level7CollectionService.findLevel7CollectionsByDepositStateType(EnumSet.of(DepositState.Type.STAGING,
-                        DepositState.Type.DEPOSITING, DepositState.Type.NOTIFYING))).thenReturn(
-                depositingLevel7Collections);
+        when(level7CollectionService.findLevel7CollectionsByDepositStateType(
+                EnumSet.of(DepositState.Type.STAGING, DepositState.Type.DEPOSITING, DepositState.Type.ARCHIVING,
+                        DepositState.Type.CLEANUP, DepositState.Type.NOTIFYING)))
+                                .thenReturn(depositingLevel7Collections);
 
-        controller.level7CollectionDepositStatus(model);
+        controller.level7CollectionDepositStatus(httpServletRequest, model);
 
         assertEquals(Arrays.asList(new Level7Collection[] { level7Collection3, level7Collection2, level7Collection1 }),
-                model.asMap().get(Level7DepositUiController.DEPOSITING_LEVEL7_COLLECTIONS_MODEL_KEY));
+                model.asMap().get(Level7DepositUiController.DEPOSITING_PARENT_DEPOSITABLES_MODEL_KEY));
     }
 
     @Test
@@ -223,10 +231,10 @@ public class Level7DepositUiControllerTest
 
         when(level7CollectionService.findRecentlyCompletedLevel7Collections()).thenReturn(depositedLevel7Collections);
 
-        controller.level7CollectionDepositStatus(model);
+        controller.level7CollectionDepositStatus(httpServletRequest, model);
 
         assertEquals(Arrays.asList(new Level7Collection[] { level7Collection3, level7Collection2, level7Collection1 }),
-                model.asMap().get(Level7DepositUiController.DEPOSITED_LEVEL7_COLLECTIONS_MODEL_KEY));
+                model.asMap().get(Level7DepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MODEL_KEY));
     }
 
     @Test
@@ -245,13 +253,37 @@ public class Level7DepositUiControllerTest
         failedLevel7Collections.add(level7Collection1);
         failedLevel7Collections.add(level7Collection2);
 
-        when(level7CollectionService.findLevel7CollectionsByDepositStateType(DepositState.Type.FAILED)).thenReturn(
-                failedLevel7Collections);
+        when(level7CollectionService.findLevel7CollectionsByDepositStateType(
+        		EnumSet.of(DepositState.Type.FAILED, DepositState.Type.INVALID))).thenReturn(failedLevel7Collections);
 
-        controller.level7CollectionDepositStatus(model);
+        controller.level7CollectionDepositStatus(httpServletRequest, model);
 
         assertEquals(Arrays.asList(new Level7Collection[] { level7Collection3, level7Collection2, level7Collection1 }),
-                model.asMap().get(Level7DepositUiController.FAILED_LEVEL7_COLLECTIONS_MODEL_KEY));
+                model.asMap().get(Level7DepositUiController.FAILED_PARENT_DEPOSITABLES_MODEL_KEY));
+    }
+    
+    @Test
+    public void testDepositStatusEndpointHasValidatingLevel7CollectionsSortedByCollectionIdDescending()
+    {
+        Model model = spy(new ExtendedModelMap());
+
+        List<Level7Collection> validatingLevel7Collections = new ArrayList<>();
+
+        Level7Collection level7Collection1 = new Level7Collection(11111);
+        Level7Collection level7Collection2 = new Level7Collection(22222);
+        Level7Collection level7Collection3 = new Level7Collection(33333);
+
+        // Note order
+        validatingLevel7Collections.add(level7Collection3);
+        validatingLevel7Collections.add(level7Collection1);
+        validatingLevel7Collections.add(level7Collection2);
+
+        when(level7CollectionService.findValidatingLevel7Collections()).thenReturn(validatingLevel7Collections);
+
+        controller.level7CollectionDepositStatus(httpServletRequest, model);
+
+        assertEquals(Arrays.asList(new Level7Collection[] { level7Collection3, level7Collection2, level7Collection1 }),
+                model.asMap().get(Level7DepositUiController.VALIDATING_PARENT_DEPOSITABLES_MODEL_KEY));
     }
 
     @Test
@@ -303,19 +335,19 @@ public class Level7DepositUiControllerTest
 
         Level7Collection level7Collection = new Level7Collection(collectionId);
 
-        Catalogue catalogue4 = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue catalogue4 = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         catalogue4.setFilename("level7BCatalogue2.xml");
         level7Collection.addCatalogue(catalogue4);
 
-        Catalogue catalogue1 = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue catalogue1 = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         catalogue1.setFilename("level7ACatalogue1.xml");
         level7Collection.addCatalogue(catalogue1);
 
-        Catalogue catalogue2 = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue catalogue2 = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         catalogue2.setFilename("level7ACatalogue2.xml");
         level7Collection.addCatalogue(catalogue2);
 
-        Catalogue catalogue3 = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue catalogue3 = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         catalogue3.setFilename("level7BCatalogue1.xml");
         level7Collection.addCatalogue(catalogue3);
 
@@ -324,9 +356,9 @@ public class Level7DepositUiControllerTest
         Model model = spy(new ExtendedModelMap());
         controller.showLevel7Collection(model, collectionId);
         assertTrue(model.asMap().keySet()
-                .contains(Level7DepositUiController.LEVEL7_COLLECTION_DEPOSITABLE_ARTEFACTS_MODEL_KEY));
+                .contains(Level7DepositUiController.DEPOSITABLE_ARTEFACTS_MODEL_KEY));
         assertEquals(Arrays.asList(catalogue1, catalogue2, catalogue3, catalogue4),
-                model.asMap().get(Level7DepositUiController.LEVEL7_COLLECTION_DEPOSITABLE_ARTEFACTS_MODEL_KEY));
+                model.asMap().get(Level7DepositUiController.DEPOSITABLE_ARTEFACTS_MODEL_KEY));
     }
 
 }

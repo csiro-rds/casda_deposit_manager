@@ -21,6 +21,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.http.HttpRequest;
@@ -47,11 +49,33 @@ import org.springframework.web.client.RestTemplate;
 public class SecuredRestTemplate extends RestTemplate
 {
     /**
+     * Default rest connection timeout in milliseconds currently 2 min
+     */
+    public static final int DEFAULT_RESTTEMPLATE_CONNECT_TIMEOUT = 120000;
+    
+    private HttpComponentsClientHttpRequestFactory requestFactory;
+    
+    /**
      * Default Constructor
-     */    
-    public SecuredRestTemplate()
+     * @param connectionTimeout the time limit for rest connections
+     */
+    @Autowired
+    public SecuredRestTemplate(@Value("${connection.timeout.limit: " 
+    		+ DEFAULT_RESTTEMPLATE_CONNECT_TIMEOUT + "}") Integer connectionTimeout)
     {
         this("", "", true);
+        int restConnectionTimeout;
+        try
+        {
+            restConnectionTimeout = connectionTimeout != null && connectionTimeout > -1 
+            		? connectionTimeout:DEFAULT_RESTTEMPLATE_CONNECT_TIMEOUT;
+        }
+        catch(Exception e)
+        {
+            restConnectionTimeout = DEFAULT_RESTTEMPLATE_CONNECT_TIMEOUT;
+        }
+
+        requestFactory.setConnectTimeout(restConnectionTimeout);
     }
 
     /**
@@ -67,7 +91,7 @@ public class SecuredRestTemplate extends RestTemplate
      */
     public SecuredRestTemplate(String userName, String password, boolean buffer)
     {
-        HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
+        requestFactory = new HttpComponentsClientHttpRequestFactory();
         requestFactory.setBufferRequestBody(buffer);
 
         // Hostname verification is turned off in NoopHostnameVerifier so this can work on all our environments

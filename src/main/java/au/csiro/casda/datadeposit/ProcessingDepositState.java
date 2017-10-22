@@ -1,5 +1,9 @@
 package au.csiro.casda.datadeposit;
 
+import au.csiro.casda.entity.observation.EvaluationFile;
+import au.csiro.casda.entity.observation.ImageDerivedProduct;
+import au.csiro.casda.entity.observation.Thumbnail;
+
 /*
  * #%L
  * CSIRO ASKAP Science Data Archive
@@ -39,7 +43,18 @@ public class ProcessingDepositState extends DepositState
     @Override
     public void progress()
     {
-        transitionTo(DepositState.Type.PROCESSED);
+    	//will progress all spectra & moment maps o encapsulating state, but only thumbnails belonging to moment maps
+    	//or spectra will follow this path, all other files (including image cube thumbnails) will transition to staging
+    	if(	getDepositable() instanceof ImageDerivedProduct ||
+    		getDepositable() instanceof EvaluationFile ||
+    		(getDepositable() instanceof Thumbnail && ((Thumbnail)getDepositable()).getEncapsulationFile() != null))
+    	{
+    		 transitionTo(DepositState.Type.ENCAPSULATING);
+    	}
+    	else
+    	{
+    		 transitionTo(DepositState.Type.PROCESSED);
+    	}
     }
 
     /**

@@ -1,12 +1,12 @@
 package au.csiro.casda.deposit.services;
 
-import javax.transaction.Transactional;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import au.csiro.casda.datadeposit.DepositStateChangeListener;
 import au.csiro.casda.datadeposit.DepositStateFactory;
@@ -76,7 +76,7 @@ public class ObservationDepositRecoveryService
      * @throws ObservationNotFoundException
      *             if the observation (sbid) requested doesnt exist
      */
-    @Transactional(value = Transactional.TxType.REQUIRED, rollbackOn = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void recoverObservation(Integer sbid) throws ObservationNotFailedRecoveryException,
             ObservationNotFoundException
     {
@@ -117,7 +117,7 @@ public class ObservationDepositRecoveryService
      * @throws ObservationNotFoundException
      *             when no observation with the given sbid exists
      */
-    @Transactional(value = Transactional.TxType.REQUIRED, rollbackOn = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void recoverArtefact(Integer sbid, String fileId) throws ObservationNotFoundException,
             ArtefactNotFoundException, ArtefactInvalidStateRecoveryException
     {

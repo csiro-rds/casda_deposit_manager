@@ -7,8 +7,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -141,7 +141,7 @@ public class ObservationDepositRecoveryServiceTest
         Observation observation = spy(new Observation());
         when(observation.getSbid()).thenReturn(sbid);
         when(observation.isFailedDeposit()).thenReturn(false);
-        when(observation.getDepositableArtefacts()).thenReturn(new HashSet<>());
+        when(observation.getDepositableArtefacts()).thenReturn(new ArrayList<>());
         
         when(mockObservationRepository.findBySbid(sbid)).thenReturn(observation);
         
@@ -156,7 +156,7 @@ public class ObservationDepositRecoveryServiceTest
         Observation observation = spy(new Observation());
         when(observation.getSbid()).thenReturn(sbid);
         when(observation.isFailedDeposit()).thenReturn(false);
-        Set<ChildDepositableArtefact> depositableArtefacts = new HashSet<>();
+        List<ChildDepositableArtefact> depositableArtefacts = new ArrayList<>();
         ImageCube imageCube = spy(new ImageCube());
         doReturn(fileId).when(imageCube).getFileId();
         when(imageCube.isFailedDeposit()).thenReturn(false);
@@ -176,7 +176,7 @@ public class ObservationDepositRecoveryServiceTest
         Observation observation = spy(new Observation());
         when(observation.getSbid()).thenReturn(sbid);
         when(observation.isFailedDeposit()).thenReturn(false);
-        Set<ChildDepositableArtefact> depositableArtefacts = new HashSet<>();
+        List<ChildDepositableArtefact> depositableArtefacts = new ArrayList<>();
         ImageCube imageCube = spy(new ImageCube());
         doReturn(fileId).when(imageCube).getFileId();
         when(imageCube.isFailedDeposit()).thenReturn(true);

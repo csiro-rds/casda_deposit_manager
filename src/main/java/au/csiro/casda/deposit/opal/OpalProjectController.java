@@ -43,7 +43,7 @@ import au.csiro.casda.services.dto.MessageDTO;
  * usage:
  * <ul>
  * <li>to get a list of unknown projects: /casda_vo_tools/opalProjectSync/getNewProjects</li>
- * <li>to set a project as known: /casda_vo_tools/opalProjectSync/flagProjectAsKnown ?opalCode=A008&shortName=EMU</li>
+ * <li>to set a project as known: /casda_vo_tools/opalProjectSync/flagProjectAsKnown?opalCode=A008&amp;shortName=EMU</li>
  * </ul>
  * <p>
  * Copyright 2014, CSIRO Australia. All rights reserved.

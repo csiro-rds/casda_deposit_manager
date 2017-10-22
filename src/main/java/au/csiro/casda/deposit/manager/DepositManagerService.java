@@ -3,6 +3,9 @@ package au.csiro.casda.deposit.manager;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.EnumSet;
 import java.util.List;
 
 import org.apache.commons.collections4.CollectionUtils;
@@ -16,7 +19,9 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import au.csiro.casda.datadeposit.DepositState;
 import au.csiro.casda.deposit.DepositManagerEvents;
+import au.csiro.casda.deposit.exception.ImportException;
 import au.csiro.casda.deposit.exception.PollingException;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
 import au.csiro.casda.entity.observation.Observation;
@@ -51,6 +56,7 @@ public class DepositManagerService
     private ObservationDepositProgressor progressor;
     private ObservationRepository observationRepository;
     private ObservationsJobsHandler observationsJobsHandler;
+    private ObservationRefreshHandler observationRefreshHandler;
     private CasdaDepositStatusProgressMonitor casdaDepositStatusProgressMonitor;
 
     private ZonedDateTime lastSuccessfulPollTime;
@@ -67,6 +73,8 @@ public class DepositManagerService
      *            the observation repository
      * @param observationsJobsHandler
      *            the obervation jobs handler
+     * @param observationRefreshHandler
+     *            the handler for observation refreshes.
      * @param casdaDepositStatusProgressMonitor
      *            the casda deposit status progress monitor
      * @param depositObservationParentDirectory
@@ -77,6 +85,7 @@ public class DepositManagerService
     @Autowired
     public DepositManagerService(ObservationDepositProgressor progressor, ObservationRepository observationRepository,
             ObservationsJobsHandler observationsJobsHandler,
+            ObservationRefreshHandler observationRefreshHandler,
             CasdaDepositStatusProgressMonitor casdaDepositStatusProgressMonitor,
             @Value("${deposit.observation.parent.directory}") String depositObservationParentDirectory,
             @Value("${deposit.rtc.poll.failure.notification.threshold.millis}") long rtcPollFailThresholdMs)
@@ -84,6 +93,7 @@ public class DepositManagerService
         this.progressor = progressor;
         this.observationRepository = observationRepository;
         this.observationsJobsHandler = observationsJobsHandler;
+        this.observationRefreshHandler = observationRefreshHandler;
         this.casdaDepositStatusProgressMonitor = casdaDepositStatusProgressMonitor;
         this.depositObservationParentDirectory = depositObservationParentDirectory;
         this.rtcPollFailureNotificationThresholdMillis = rtcPollFailThresholdMs;
@@ -127,13 +137,58 @@ public class DepositManagerService
     }
 
     /**
-     * Progresses any non-DEPOSITED Observations.
+     * Redeposit the observation by processing the updated observation XML file.
+     * @param sbid The scheduling block id of the observation.
+     * @return True if the observation could be redeposited, false if there was an error.
+     */
+    public boolean redepositObservation(int sbid)
+    {
+        boolean result = false;
+        try
+        {
+            observationsJobsHandler.redepositObservation(depositObservationParentDirectory, sbid);
+            result = true;
+        }
+        catch (ImportException e)
+        {
+            logger.error(DepositManagerEvents.E073.messageBuilder().add(e.getSbid()).toString(), e);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Progresses any non-DEPOSITED Observations (excluding archived as they will be handled by a less frequent poll).
      */
     @Scheduled(fixedDelayString = "${deposit.workflow.progression.delay.millis}")
-    public void progressObservations()
+    public void progressNonArchivingObservations()
+    {
+        //a collection containing all types except deposited, archiving and failed
+        EnumSet<DepositState.Type> typeList = EnumSet.allOf((DepositState.Type.class));
+        typeList.removeAll
+                (Arrays.asList(DepositState.Type.DEPOSITED, DepositState.Type.ARCHIVING, DepositState.Type.FAILED));
+
+        progressObservations(typeList);
+    }
+    
+    /**
+     * Progresses any ARCHIVING Observations.
+     */
+    @Scheduled(fixedDelayString = "${deposit.archiving.workflow.progression.delay.millis}")
+    public void progressArchivingObservations()
+    {
+        //a list containing only archiving type
+        EnumSet<DepositState.Type> typeList = EnumSet.of(DepositState.Type.ARCHIVING);
+
+        progressObservations(typeList);
+    }
+    
+    private void progressObservations(EnumSet<DepositState.Type> typeList)
     {
         logger.debug("Progressing observations");
-        List<Observation> observations = observationRepository.findDepositingObservations();
+
+        List<Observation> observations = 
+                observationRepository.findDepositingObservationsForDepositStateTypeOrdered(typeList);
         if (CollectionUtils.isNotEmpty(observations))
         {
             logger.debug("{}", "-------------------------------------------------------");
@@ -142,6 +197,7 @@ public class DepositManagerService
         {
             logger.debug("{}", "Progressing Observation " + observation.getSbid().toString());
 
+            long startTime = (new Date()).getTime();
             try
             {
                 progressor.progressObservation(observation.getSbid());
@@ -158,12 +214,29 @@ public class DepositManagerService
                                         "Rolling back, observation modified by another process "
                                                 + observation.getSbid()).toString(), e);
             }
+            long endTime = (new Date()).getTime();
+            logger.info("Progressed observation " + observation.getSbid() + " in " + (endTime - startTime) + " ms.");
 
             Observation changedObservation = observationRepository.findBySbid(observation.getSbid());
 
             logger.debug("{}", String.format("Observation %d now %s", changedObservation.getSbid(), changedObservation
                     .getDepositStateType().toString()));
             logger.debug("{}", "-------------------------------------------------------");
+        }
+    }
+    
+    /**
+     * Progresses any active refresh jobs.
+     */
+    @Scheduled(fixedDelayString = "${deposit.workflow.refresh.delay.millis}")
+    public void progressRefreshObservations()
+    {
+        long startTime = (new Date()).getTime();
+        boolean anyActive = observationRefreshHandler.progressRefreshObservations();
+        if (anyActive)
+        {
+            long endTime = (new Date()).getTime();
+            logger.info("Progressed refresh in " + (endTime - startTime) + " ms.");
         }
     }
 

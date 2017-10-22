@@ -39,6 +39,7 @@ import au.csiro.casda.dto.ObservationProjectDataProductsDTO;
 import au.csiro.casda.dto.QualityFlagDTO;
 import au.csiro.casda.dto.ValidationNoteDTO;
 import au.csiro.casda.services.dto.MessageDTO;
+import au.csiro.casda.services.dto.Message.MessageCode;
 
 import com.wordnik.swagger.annotations.Api;
 
@@ -127,6 +128,18 @@ public class ObservationController
                 throw new ServerException("error trying to retrieve the released observations", dataAccessException);
             }
         }
+        else if ("refreshed".equals(state))
+        {
+            try
+            {
+                return observationService.getRefreshedProjectBlocks(date);
+            }
+            catch (DataAccessException dataAccessException)
+            {
+                logger.error("error trying to retrieve the refreshed observations", dataAccessException);
+                throw new ServerException("error trying to retrieve the refreshed observations", dataAccessException);
+            }
+        }
         throw new BadRequestException("Invalid state. State must be 'released' or 'unreleased'.");
     }
 
@@ -172,7 +185,7 @@ public class ObservationController
     @RequestMapping(method = RequestMethod.GET, value = "/observations/quality_flags", produces = "application/json")
     public @ResponseBody List<QualityFlagDTO> getQualityFlags()
     {
-        logger.info("Hit the controller for /observation/quality_flags");
+        logger.info("Hit the controller for /observations/quality_flags");
         return observationService.getActiveQualityFlags();
     }
 
@@ -249,5 +262,18 @@ public class ObservationController
         logger.info("Hit the controller for '/observations/{}/projects/{}/validationnotes'", sbid, opalCode);
 
         return observationService.addValidationNote(sbid, opalCode, validationNoteDto);
+    }
+
+    /**
+     * Manually trigger the regeneration of the catalogue HiPS
+     * 
+     * @return MessageDTO on success
+     */
+    @RequestMapping(method = RequestMethod.PUT, value = "/observations/cataloguehips", produces = "application/json")
+    public @ResponseBody MessageDTO regenerateCatalogueHips()
+    {
+        logger.info("Hit the controller for /observations/cataloguehips");
+        observationService.regenerateCatalogueHips();
+        return new MessageDTO(MessageCode.SUCCESS, "Regeneration triggered.");
     }
 }

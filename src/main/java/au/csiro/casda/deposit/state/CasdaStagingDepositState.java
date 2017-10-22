@@ -70,7 +70,7 @@ public class CasdaStagingDepositState extends StagingDepositState
         this.processJobBuilder = processJobBuilder;
         if (depositableArtefact.getParent() instanceof Level7Collection)
         {
-            this.processJobBuilder.setProcessParameter("parent_type","level7");
+            this.processJobBuilder.setProcessParameter("parent_type","derived-catalogue");
             this.processJobBuilder.setProcessParameter("infile" , 
                     getInfile(depositableArtefact, level7CollectionParentDirectory));
         }
@@ -95,16 +95,17 @@ public class CasdaStagingDepositState extends StagingDepositState
     @Override
     public void progress()
     {
-        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId());
+        JobManager.JobStatus jobStatus = jobManager.getJobStatus(getJobId(STAGE_ARTEFACT_COMMAND_LINE_TOOL_NAME));
         if (jobStatus == null)
         {
-            Job job = processJobBuilder.createJob(getJobId(), STAGE_ARTEFACT_COMMAND_LINE_TOOL_NAME);
+            Job job = processJobBuilder.createJob
+            		(getJobId(STAGE_ARTEFACT_COMMAND_LINE_TOOL_NAME), STAGE_ARTEFACT_COMMAND_LINE_TOOL_NAME);
             jobManager.startJob(job);
         }
         else if (jobStatus.isFailed())
         {
-            logger.error("Job {} failed while staging deposit state with output :{}", getJobId(),
-                    jobStatus.getJobOutput());
+            logger.error("Job {} failed while staging deposit state with output :{}", 
+            		getJobId(STAGE_ARTEFACT_COMMAND_LINE_TOOL_NAME), jobStatus.getJobOutput());
             transitionTo(DepositState.Type.FAILED);
         }
         else if (jobStatus.isFinished())
@@ -120,12 +121,6 @@ public class CasdaStagingDepositState extends StagingDepositState
     public ChildDepositableArtefact getDepositable()
     {
         return (ChildDepositableArtefact) super.getDepositable();
-    }
-
-    private String getJobId()
-    {
-        return String.format("%s-%s-%d", STAGE_ARTEFACT_COMMAND_LINE_TOOL_NAME,
-                getDepositable().getUniqueIdentifier(), getDepositable().getDepositFailureCount());
     }
     
     private String getInfile(ChildDepositableArtefact depositableArtefact, String parentDir)

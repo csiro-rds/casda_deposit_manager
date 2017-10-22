@@ -1,5 +1,6 @@
 package au.csiro.casda.deposit.manager;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 
@@ -17,9 +18,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.MockitoAnnotations;
 
 import au.csiro.casda.deposit.exception.PollingException;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
+import au.csiro.casda.deposit.services.ObservationService;
 import au.csiro.casda.jobmanager.JavaProcessJobFactory;
 import au.csiro.casda.jobmanager.SynchronousProcessJobManager;
 
@@ -53,12 +56,17 @@ public class ObservationsJobsHandlerFindFilesTest
     @Rule
     public ExpectedException exception = ExpectedException.none();
 
+    private ObservationService observationService;
+    
     @Before
     public void setUp() throws IOException
     {
+        MockitoAnnotations.initMocks(this);
         testObsRootDir = Paths.get(tempFolder.newFolder("DATA_DEPOSIT_TEST_ROOTDIR").getPath());
+        observationService = new ObservationService();
         observationsJobsHandler = new ObservationsJobsHandler(new JavaProcessJobFactory(), ".", ".", null,
-                mock(SynchronousProcessJobManager.class), mock(ObservationRepository.class));
+                mock(SynchronousProcessJobManager.class), observationService,
+                mock(ObservationRepository.class));
     }
 
     @Test
@@ -194,6 +202,47 @@ public class ObservationsJobsHandlerFindFilesTest
 
         // The obs dir with the DONE file should not be found
         Assert.assertEquals(2, readyFiles.size());
+    }
+    
+    /**
+     * Same as test above but checks that directories containing an ERROR file is also skipped
+     * ROOT_DIR / obs01 / {READY}
+     * <p>
+     * ROOT_DIR / obs02 / {READY}
+     * <p>
+     * ROOT_DIR / obs03 / {READY, DONE}
+     * 
+     * @throws IOException
+     * @throws PollingException
+     */
+    @Test
+    public void testFindErrorFilesThreeDirsReadyFilesAndOneDoneExist() throws IOException, PollingException
+    {
+        String subDirName1 = "obs01";
+        String subDirName2 = "obs02";
+        String subDirName3 = "obs03";
+
+        Path obsDir1 = Files.createTempDirectory(testObsRootDir, subDirName1);
+        Path obsDir1ReadyFile1 = Files.createFile(Paths.get(obsDir1.toString(), "READY"));
+        Path obsDir2 = Files.createTempDirectory(testObsRootDir, subDirName2);
+        Path obsDir1ReadyFile2 = Files.createFile(Paths.get(obsDir2.toString(), "READY"));
+        Path obsDir3 = Files.createTempDirectory(testObsRootDir, subDirName3);
+        Path obsDir3ReadyFile3 = Files.createFile(Paths.get(obsDir3.toString(), "READY"));
+        Path obsDir3DoneFile1 = Files.createFile(Paths.get(obsDir3.toString(), "ERROR"));
+
+        Assert.assertTrue(obsDir1ReadyFile1.toFile().exists());
+        Assert.assertTrue(obsDir1ReadyFile2.toFile().exists());
+        Assert.assertTrue(obsDir3ReadyFile3.toFile().exists());
+        Assert.assertTrue(obsDir3DoneFile1.toFile().exists());
+
+        List<Path> readyFiles = observationsJobsHandler.findNewObservationDirs(testObsRootDir.toString());
+
+        // The obs dir with the DONE file should not be found
+        Assert.assertEquals(2, readyFiles.size());
+        
+        // Ensure that the entry with an ERROR file was registered for display
+        String obsFolderName = obsDir3.getFileName().toString();
+        Assert.assertThat(observationService.getInvalidObservationIds(), contains(obsFolderName));
     }
 
     @Test

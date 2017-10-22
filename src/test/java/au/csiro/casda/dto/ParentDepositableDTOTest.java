@@ -48,6 +48,7 @@ public class ParentDepositableDTOTest extends AbstractMarshallingTest<ParentDepo
         artefact.setFilename(RandomStringUtils.random(50));
         artefact.setFilesizeInBytes((long) Integer.MAX_VALUE + RandomUtils.nextInt(0, Integer.MAX_VALUE));
         artefact.setChecksum(RandomStringUtils.random(20));
+        artefact.setThumbnailName(RandomStringUtils.random(50));
 
         testObject.setDepositableArtefacts(new DepositableArtefactDTO[] { artefact });
 
@@ -71,9 +72,8 @@ public class ParentDepositableDTOTest extends AbstractMarshallingTest<ParentDepo
     {
         super.validateJsonSerialisedObject(testObj, map);
 
-        assertThat(map.keySet().size(), equalTo(3));
-        assertThat(map.keySet(),
-                containsInAnyOrder("depositState", "depositableTypeDescription", "depositableArtefacts"));
+        assertThat(map.keySet(), containsInAnyOrder("depositState", "depositableTypeDescription",
+                "depositableArtefacts", "imageCubePath", "spectrumPath", "momentMapPath", "cubeletPath", "errors"));
         assertThat(map.get("depositState"), instanceOf(String.class));
         assertThat((String) map.get("depositState"), equalTo(testObj.getDepositState().toString()));
         assertThat(map.get("depositableTypeDescription"), instanceOf(String.class));
@@ -84,11 +84,10 @@ public class ParentDepositableDTOTest extends AbstractMarshallingTest<ParentDepo
         assertThat(depositableArtefacts.size(), equalTo(1));
         assertThat(depositableArtefacts.get(0), instanceOf(Map.class));
         Map<String, Object> depositableArtefact = depositableArtefacts.get(0);
-        assertThat(depositableArtefact.keySet().size(), equalTo(5));
         assertThat(
                 depositableArtefact.keySet(),
                 containsInAnyOrder("depositState", "depositableTypeDescription", "filename", "filesizeInBytes",
-                        "checksum"));
+                        "checksum", "thumbnailName"));
 
         assertThat(depositableArtefact.get("depositState"), instanceOf(String.class));
         assertThat((String) depositableArtefact.get("depositState"), equalTo(testObj.getDepositableArtefacts()[0]
@@ -105,6 +104,7 @@ public class ParentDepositableDTOTest extends AbstractMarshallingTest<ParentDepo
         assertThat(depositableArtefact.get("checksum"), instanceOf(String.class));
         assertThat((String) depositableArtefact.get("checksum"),
                 equalTo(testObj.getDepositableArtefacts()[0].getChecksum()));
+        assertThat(depositableArtefact.get("thumbnailName"), instanceOf(String.class));
     }
 
     private DepositStateDTO getSampleDepositStatus()

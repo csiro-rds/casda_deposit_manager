@@ -1,5 +1,8 @@
 package au.csiro.casda.datadeposit;
 
+import au.csiro.casda.deposit.jdbc.SimpleJdbcRepository;
+import au.csiro.casda.entity.observation.FitsObject;
+
 /*
  * #%L
  * CSIRO ASKAP Science Data Archive
@@ -20,6 +23,8 @@ package au.csiro.casda.datadeposit;
  */
 public class RegisteredDepositState extends DepositState
 {
+    private SimpleJdbcRepository simpleJdbcRepository;
+
     /**
      * Constructor. (see {@link DepositState})
      * 
@@ -27,10 +32,14 @@ public class RegisteredDepositState extends DepositState
      *            (see {@link DepositState})
      * @param depositable
      *            (see {@link DepositState})
+     * @param simpleJdbcRepository
+     *            the repository for running arbitrary SQL statements
      */
-    public RegisteredDepositState(DepositStateFactory stateFactory, Depositable depositable)
+    public RegisteredDepositState(DepositStateFactory stateFactory, Depositable depositable,
+            SimpleJdbcRepository simpleJdbcRepository)
     {
         super(DepositState.Type.REGISTERED, stateFactory, depositable);
+        this.simpleJdbcRepository = simpleJdbcRepository;
     }
 
     /**
@@ -39,6 +48,15 @@ public class RegisteredDepositState extends DepositState
     @Override
     public void progress()
     {
+        if (getDepositable() instanceof FitsObject)
+        {
+            String imageType = ((FitsObject) getDepositable()).getType();
+            if (simpleJdbcRepository.isImageTypeIncludeCoverage(imageType))
+            {
+                transitionTo(DepositState.Type.MAPPING);
+                return;
+            }
+        }
         transitionTo(DepositState.Type.ARCHIVING);
     }
 

@@ -30,6 +30,7 @@ import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.datadeposit.Depositable;
 import au.csiro.casda.deposit.CasdaToolProcessJobBuilderFactory;
 import au.csiro.casda.deposit.SingleJobMonitorFactory;
+import au.csiro.casda.deposit.jdbc.SimpleJdbcRepository;
 import au.csiro.casda.deposit.services.NgasService;
 import au.csiro.casda.deposit.services.VoToolsService;
 import au.csiro.casda.entity.CasdaDepositableEntity;
@@ -87,20 +88,32 @@ public class CasdaDepositStateFactoryTest
     @Mock
     private VoToolsService voToolsService;
 
+    @Mock
+    private SimpleJdbcRepository simpleJdbcRepository;
+
     @Before
     public void setup()
     {
         MockitoAnnotations.initMocks(this);
         this.stateFactory = new CasdaDepositStateFactory(ngasService, jobManager, factory, new JavaProcessJobFactory(),
-                singleJobMonitorFactory, voToolsService, "observation", "level7", "{\"stageCommand\"}", "SIMPLE",
-                "stageCommandAndArgs", "{\"registerCommand\"}", "SIMPLE", "registerCommandAndArgs", "archiveStatus",
-                "archivePut", " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }");
+                singleJobMonitorFactory, voToolsService, simpleJdbcRepository, "", "observation", "level7",
+                "{\"stageCommand\"}", "SIMPLE", "stageCommandAndArgs", "{\"registerCommand\"}", "SIMPLE",
+                "registerCommandAndArgs", "archiveStatus", "archivePut",
+                " {\"stage_artefact\", \"1\", \"register_artefact\", \"4\" }", "");
     }
 
     @Test
     public void testCreateUndepositedStateForObservation()
     {
         DepositState.Type type = DepositState.Type.UNDEPOSITED;
+        initialiseObservationDepositableWithState(type);
+        checkStateFields(type);
+    }
+    
+    @Test
+    public void testCreatePriorityDepositingStateForObservation()
+    {
+        DepositState.Type type = DepositState.Type.PRIORITY_DEPOSITING;
         initialiseObservationDepositableWithState(type);
         checkStateFields(type);
     }
@@ -123,6 +136,18 @@ public class CasdaDepositStateFactoryTest
     public void createStateForProcessedForObservationShouldThrowException()
     {
         checkIllegalStateExceptionThrownForDepositableWithState(new Observation(), DepositState.Type.PROCESSED);
+    }
+    
+    @Test
+    public void createStateForEncapsulatingForObservationShouldThrowException()
+    {
+        checkIllegalStateExceptionThrownForDepositableWithState(new Observation(), DepositState.Type.ENCAPSULATING);
+    }
+    
+    @Test
+    public void createStateForEncapsulatedForObservationShouldThrowException()
+    {
+        checkIllegalStateExceptionThrownForDepositableWithState(new Observation(), DepositState.Type.ENCAPSULATED);
     }
 
     @Test
@@ -180,6 +205,14 @@ public class CasdaDepositStateFactoryTest
         initialiseObservationDepositableWithState(type);
         checkStateFields(type);
     }
+    
+    @Test
+    public void createStateForPriorityDepositingForDepositableArtefactShouldThrowException()
+    {
+        checkIllegalStateExceptionThrownForDepositableWithState(
+                new DummyObservationDepositableArtefact(new Observation(1234), "filename.xml"),
+                DepositState.Type.PRIORITY_DEPOSITING);
+    }
 
     @Test
     public void createStateForDepositingForDepositableArtefactShouldThrowException()
@@ -201,6 +234,22 @@ public class CasdaDepositStateFactoryTest
     public void testCreateProcessedStateForDepositableArtefact()
     {
         DepositState.Type type = DepositState.Type.PROCESSED;
+        initialiseDepositableArtefactDepositableWithState(type);
+        checkStateFields(type);
+    }
+
+    @Test
+    public void testCreateEncapsulatingStateForDepositableArtefact()
+    {
+        DepositState.Type type = DepositState.Type.ENCAPSULATING;
+        initialiseDepositableArtefactDepositableWithState(type);
+        checkStateFields(type);
+    }
+
+    @Test
+    public void testCreateEncapsulatedStateForDepositableArtefact()
+    {
+        DepositState.Type type = DepositState.Type.ENCAPSULATED;
         initialiseDepositableArtefactDepositableWithState(type);
         checkStateFields(type);
     }

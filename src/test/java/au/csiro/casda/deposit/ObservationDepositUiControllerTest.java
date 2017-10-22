@@ -1,5 +1,20 @@
 package au.csiro.casda.deposit;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import static org.hamcrest.CoreMatchers.is;
+
 /*
  * #%L
  * CSIRO ASKAP Science Data Archive
@@ -14,21 +29,10 @@ package au.csiro.casda.deposit;
 
 
 import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -38,6 +42,7 @@ import java.util.Set;
 import javax.servlet.http.HttpServletRequest;
 
 import org.apache.logging.log4j.Level;
+import org.joda.time.DateTime;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -52,18 +57,26 @@ import org.springframework.web.servlet.view.RedirectView;
 import au.csiro.casda.ResourceNotFoundException;
 import au.csiro.casda.datadeposit.ChildDepositableArtefact;
 import au.csiro.casda.datadeposit.DepositState;
+import au.csiro.casda.datadeposit.DepositState.Type;
+import au.csiro.casda.datadeposit.IntermediateDepositState;
 import au.csiro.casda.deposit.exception.ArtefactInvalidStateRecoveryException;
 import au.csiro.casda.deposit.exception.ObservationNotFailedRecoveryException;
 import au.csiro.casda.deposit.exception.ObservationNotFoundException;
 import au.csiro.casda.deposit.jpa.ObservationRepository;
+import au.csiro.casda.deposit.manager.DepositManagerService;
 import au.csiro.casda.deposit.services.ObservationDepositRecoveryService;
 import au.csiro.casda.deposit.services.ObservationService;
 import au.csiro.casda.entity.observation.Catalogue;
 import au.csiro.casda.entity.observation.CatalogueType;
+import au.csiro.casda.entity.observation.Cubelet;
 import au.csiro.casda.entity.observation.EvaluationFile;
 import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.MeasurementSet;
+import au.csiro.casda.entity.observation.MomentMap;
 import au.csiro.casda.entity.observation.Observation;
+import au.csiro.casda.entity.observation.Project;
+import au.csiro.casda.entity.observation.Spectrum;
+import au.csiro.casda.entity.observation.Thumbnail;
 
 /**
  * Tests the Observation Deposit UI Controller.
@@ -89,7 +102,13 @@ public class ObservationDepositUiControllerTest
     private ObservationRepository observationRepository;
 
     @Mock
+    private DepositManagerService depositManagerService;
+
+    @Mock
     private FlashHelper flashHelper;
+    
+    @Mock
+    private HttpServletRequest httpServletRequest;
 
     private Log4JTestAppender testAppender;
 
@@ -104,6 +123,7 @@ public class ObservationDepositUiControllerTest
     {
         testAppender = Log4JTestAppender.createAppender();
         MockitoAnnotations.initMocks(this);
+        when(httpServletRequest.getRequestURL()).thenReturn(new StringBuffer("localhost:8080/hello/"));
     }
 
     @SuppressWarnings("unchecked")
@@ -114,7 +134,7 @@ public class ObservationDepositUiControllerTest
 
         when(observationService.findObservationsByDepositStateType(any(EnumSet.class))).thenReturn(new ArrayList<>());
 
-        String newPage = controller.observationDepositStatus(model);
+        String newPage = controller.observationDepositStatus(httpServletRequest, model);
         assertEquals(ObservationDepositUiController.OBSERVATION_DEPOSIT_STATUS_PAGE, newPage);
     }
 
@@ -127,25 +147,28 @@ public class ObservationDepositUiControllerTest
         when(observationService.findObservationsByDepositStateType(any(EnumSet.class))).thenReturn(new ArrayList<>());
         when(observationService.findRecentlyCompletedObservations()).thenReturn(new ArrayList<>());
 
-        String newPage = controller.observationDepositStatus(model);
+        String newPage = controller.observationDepositStatus(httpServletRequest, model);
         assertEquals(ObservationDepositUiController.OBSERVATION_DEPOSIT_STATUS_PAGE, newPage);
 
         Set<String> expectedModelKeys =
-                new HashSet<>(Arrays.asList(ObservationDepositUiController.DEPOSITING_OBSERVATIONS_MODEL_KEY,
-                        ObservationDepositUiController.DEPOSITED_OBSERVATIONS_MODEL_KEY,
-                        ObservationDepositUiController.FAILED_OBSERVATIONS_MODEL_KEY,
-                        ObservationDepositUiController.FAILED_OBSERVATION_DEPOSITABLES_MODEL_KEY,
-                        ObservationDepositUiController.DEPOSITED_OBSERVATIONS_MAX_AGE_MODEL_KEY));
+                new HashSet<>(Arrays.asList(ObservationDepositUiController.DEPOSITING_PARENT_DEPOSITABLES_MODEL_KEY,
+                        ObservationDepositUiController.INVALID_OBSERVATIONS_MODEL_KEY,
+                        ObservationDepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MODEL_KEY,
+                        ObservationDepositUiController.FAILED_PARENT_DEPOSITABLES_MODEL_KEY,
+                        ObservationDepositUiController.FAILED_DEPOSITABLES_MODEL_KEY,
+                        ObservationDepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MAX_AGE_MODEL_KEY,
+                        ObservationDepositUiController.FAILED_OBSERVATIONS_MAX_AGE_MODEL_KEY,
+                        ObservationDepositUiController.DEPOSIT_STATUS_URL));
         assertEquals(expectedModelKeys, model.asMap().keySet());
         assertEquals(Arrays.asList(new Observation[0]),
-                model.asMap().get(ObservationDepositUiController.FAILED_OBSERVATIONS_MODEL_KEY));
+                model.asMap().get(ObservationDepositUiController.FAILED_PARENT_DEPOSITABLES_MODEL_KEY));
         assertEquals(Arrays.asList(new Observation[0]),
-                model.asMap().get(ObservationDepositUiController.DEPOSITING_OBSERVATIONS_MODEL_KEY));
+                model.asMap().get(ObservationDepositUiController.DEPOSITING_PARENT_DEPOSITABLES_MODEL_KEY));
         assertEquals(Arrays.asList(new Observation[0]),
-                model.asMap().get(ObservationDepositUiController.DEPOSITED_OBSERVATIONS_MODEL_KEY));
+                model.asMap().get(ObservationDepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MODEL_KEY));
         Map<Integer, List<ChildDepositableArtefact>> failureMap =
                 (Map<Integer, List<ChildDepositableArtefact>>) model.asMap().get(
-                        ObservationDepositUiController.FAILED_OBSERVATION_DEPOSITABLES_MODEL_KEY);
+                        ObservationDepositUiController.FAILED_DEPOSITABLES_MODEL_KEY);
         assertTrue(failureMap.isEmpty());
 
     }
@@ -168,7 +191,7 @@ public class ObservationDepositUiControllerTest
 
         List<Observation> failedObsList = new ArrayList<>();
         failedObsList.add(failedObservation);
-        when(observationService.findObservationsByDepositStateType(DepositState.Type.FAILED)).thenReturn(failedObsList);
+        when(observationService.findObservationsFailedSince(any())).thenReturn(failedObsList);
 
         List<Observation> activeObsList = new ArrayList<>();
         Observation activeObservation = new Observation(33333);
@@ -180,21 +203,25 @@ public class ObservationDepositUiControllerTest
         when(depositable3.isFailedDeposit()).thenReturn(true);
         activeObsList.add(failingObservation);
         when(
-                observationService.findObservationsByDepositStateType(EnumSet.of(DepositState.Type.STAGING,
-                        DepositState.Type.DEPOSITING, DepositState.Type.NOTIFYING))).thenReturn(activeObsList);
+                observationService.findObservationsByDepositStateType(EnumSet.of(
+                		DepositState.Type.STAGING,
+                        DepositState.Type.DEPOSITING, 
+                        DepositState.Type.ARCHIVING, 
+                        DepositState.Type.PRIORITY_DEPOSITING, 
+                        DepositState.Type.NOTIFYING))).thenReturn(activeObsList);
 
         when(observationService.findRecentlyCompletedObservations()).thenReturn(new ArrayList<>(0));
 
-        controller.observationDepositStatus(model);
+        controller.observationDepositStatus(httpServletRequest, model);
 
         Map<Integer, List<ChildDepositableArtefact>> failureMap =
                 (Map<Integer, List<ChildDepositableArtefact>>) model.asMap().get(
-                        ObservationDepositUiController.FAILED_OBSERVATION_DEPOSITABLES_MODEL_KEY);
-        assertEquals(2, failureMap.keySet().size());
+                        ObservationDepositUiController.FAILED_DEPOSITABLES_MODEL_KEY);
         assertTrue(failureMap.keySet().contains(failingObservation.getSbid()));
         assertEquals(Arrays.asList(depositable1, depositable2), failureMap.get(failedObservation.getSbid()));
         assertTrue(failureMap.keySet().contains(failedObservation.getSbid()));
         assertEquals(Arrays.asList(depositable3), failureMap.get(failingObservation.getSbid()));
+        assertEquals(2, failureMap.keySet().size());
     }
 
     @Test
@@ -214,13 +241,17 @@ public class ObservationDepositUiControllerTest
         depositingObservations.add(observation2);
 
         when(
-                observationService.findObservationsByDepositStateType(EnumSet.of(DepositState.Type.STAGING,
-                        DepositState.Type.DEPOSITING, DepositState.Type.NOTIFYING))).thenReturn(depositingObservations);
+                observationService.findObservationsByDepositStateType(EnumSet.of(
+                		DepositState.Type.STAGING,
+                		DepositState.Type.PRIORITY_DEPOSITING, 
+                        DepositState.Type.DEPOSITING, 
+                		DepositState.Type.ARCHIVING, 
+                		DepositState.Type.NOTIFYING))).thenReturn(depositingObservations);
 
-        controller.observationDepositStatus(model);
+        controller.observationDepositStatus(httpServletRequest, model);
 
         assertEquals(Arrays.asList(new Observation[] { observation3, observation2, observation1 }),
-                model.asMap().get(ObservationDepositUiController.DEPOSITING_OBSERVATIONS_MODEL_KEY));
+                model.asMap().get(ObservationDepositUiController.DEPOSITING_PARENT_DEPOSITABLES_MODEL_KEY));
     }
 
     @Test
@@ -241,10 +272,10 @@ public class ObservationDepositUiControllerTest
 
         when(observationService.findRecentlyCompletedObservations()).thenReturn(depositedObservations);
 
-        controller.observationDepositStatus(model);
+        controller.observationDepositStatus(httpServletRequest, model);
 
         assertEquals(Arrays.asList(new Observation[] { observation3, observation2, observation1 }),
-                model.asMap().get(ObservationDepositUiController.DEPOSITED_OBSERVATIONS_MODEL_KEY));
+                model.asMap().get(ObservationDepositUiController.DEPOSITED_PARENT_DEPOSITABLES_MODEL_KEY));
     }
 
     @Test
@@ -263,13 +294,13 @@ public class ObservationDepositUiControllerTest
         failedObservations.add(observation1);
         failedObservations.add(observation2);
 
-        when(observationService.findObservationsByDepositStateType(DepositState.Type.FAILED)).thenReturn(
+        when(observationService.findObservationsFailedSince(any())).thenReturn(
                 failedObservations);
 
-        controller.observationDepositStatus(model);
+        controller.observationDepositStatus(httpServletRequest, model);
 
         assertEquals(Arrays.asList(new Observation[] { observation3, observation2, observation1 }),
-                model.asMap().get(ObservationDepositUiController.FAILED_OBSERVATIONS_MODEL_KEY));
+                model.asMap().get(ObservationDepositUiController.FAILED_PARENT_DEPOSITABLES_MODEL_KEY));
     }
 
     @Test
@@ -295,6 +326,82 @@ public class ObservationDepositUiControllerTest
 
         Model model = spy(new ExtendedModelMap());
         assertEquals(ObservationDepositUiController.OBSERVATION_SHOW_PAGE, controller.showObservation(model, sbid));
+    }
+
+    @Test
+    public void showObservationWithSpectraShouldSummariseSpectra() throws ResourceNotFoundException
+    {
+        int sbid = 1111;
+        Project project = new Project("AA000"); 
+        Observation obs = new Observation(sbid);
+        Spectrum spectrum = new Spectrum(project);
+        DepositState depositState = mock(DepositState.class);
+        when(depositState.getType()).thenReturn(DepositState.Type.PROCESSING);
+        spectrum.setDepositState(depositState);
+        obs.addSpectra(spectrum);
+        
+        Thumbnail thumb = new Thumbnail();
+        DepositState stateEncapsulating = mock(DepositState.class);
+        when(stateEncapsulating.getType()).thenReturn(DepositState.Type.ENCAPSULATING);
+        thumb.setDepositState(stateEncapsulating);
+        spectrum.setThumbnail(thumb);
+
+        MomentMap mom = new MomentMap(project);
+        DateTime releasedDate = new DateTime();
+        mom.setReleasedDate(releasedDate);
+        DepositState stateDeposited = mock(DepositState.class);
+        when(stateDeposited.getType()).thenReturn(DepositState.Type.DEPOSITED);
+        mom.setDepositState(stateDeposited);
+        obs.addMomentMap(mom);
+        
+        Cubelet cube = new Cubelet(project);
+        cube.setReleasedDate(releasedDate);
+        cube.setDepositState(stateDeposited);
+        obs.addCubelet(cube);
+        
+
+        when(observationRepository.findBySbid(anyInt())).thenReturn(obs);
+
+        Model model = spy(new ExtendedModelMap());
+        assertEquals(ObservationDepositUiController.OBSERVATION_SHOW_PAGE, controller.showObservation(model, sbid));
+        Map<String, Object> resultsMap = model.asMap();
+        @SuppressWarnings("unchecked")
+        Collection<DepositableStatusSummary> summaries = (Collection<DepositableStatusSummary>) resultsMap
+                .get(ObservationDepositUiController.ARTEFACT_SUMMARIES_MODEL_KEY);
+        for (DepositableStatusSummary statusSummary : summaries)
+        {
+            if (statusSummary.getDescription().equals("Spectrum"))
+            {
+                assertThat(statusSummary.getDescription(), is("Spectrum"));
+                assertThat(statusSummary.getDepositStateDescription(), is("Processing"));
+                assertThat(statusSummary.getProjectCode(), is("AA000"));
+                assertThat(statusSummary.getNumArtefacts(), is(1));
+            }
+            else if (statusSummary.getDescription().equals("Moment Map"))
+            {
+                assertThat(statusSummary.getDescription(), is("Moment Map"));
+                assertThat(statusSummary.getDepositStateDescription(), is("Deposited"));
+                assertThat(statusSummary.getProjectCode(), is("AA000"));
+                assertThat(statusSummary.getNumArtefacts(), is(1));
+                assertThat(statusSummary.getReleasedDate(), is(releasedDate));
+            }
+            else if (statusSummary.getDescription().equals("Cubelet"))
+            {
+                assertThat(statusSummary.getDescription(), is("Cubelet"));
+                assertThat(statusSummary.getDepositStateDescription(), is("Deposited"));
+                assertThat(statusSummary.getProjectCode(), is("AA000"));
+                assertThat(statusSummary.getNumArtefacts(), is(1));
+                assertThat(statusSummary.getReleasedDate(), is(releasedDate));
+            }
+            else
+            {
+                assertThat(statusSummary.getDescription(), is("Thumbnail"));
+                assertThat(statusSummary.getDepositStateDescription(), is("Encapsulating"));
+                assertThat(statusSummary.getProjectCode(), is("N/A"));
+                assertThat(statusSummary.getNumArtefacts(), is(1));
+            }
+        }
+        assertThat(summaries.size(), is(4));
     }
 
     @Test
@@ -350,24 +457,16 @@ public class ObservationDepositUiControllerTest
         measurementSet1.setFilename("measurementSet1.tar");
         observation.addMeasurementSet(measurementSet1);
 
-        EvaluationFile evaluationFile2 = new EvaluationFile();
-        evaluationFile2.setFilename("evaluationFile2.pdfs");
-        observation.addEvaluationFile(evaluationFile2);
-
-        EvaluationFile evaluationFile1 = new EvaluationFile();
-        evaluationFile1.setFilename("evaluationFile1.pdf");
-        observation.addEvaluationFile(evaluationFile1);
-
         when(observationRepository.findBySbid(anyInt())).thenReturn(observation);
 
         Model model = spy(new ExtendedModelMap());
         controller.showObservation(model, sbid);
         assertTrue(model.asMap().keySet()
-                .contains(ObservationDepositUiController.OBSERVATION_DEPOSITABLE_ARTEFACTS_MODEL_KEY));
+                .contains(ObservationDepositUiController.DEPOSITABLE_ARTEFACTS_MODEL_KEY));
         assertEquals(Arrays.asList(observation.getObservationMetadataFileDepositable(), catalogue1, catalogue2,
-                catalogue3, catalogue4, evaluationFile1, evaluationFile2, imageCube1, imageCube2, measurementSet1,
+                catalogue3, catalogue4, imageCube1, imageCube2, measurementSet1,
                 measurementSet2),
-                model.asMap().get(ObservationDepositUiController.OBSERVATION_DEPOSITABLE_ARTEFACTS_MODEL_KEY));
+                model.asMap().get(ObservationDepositUiController.DEPOSITABLE_ARTEFACTS_MODEL_KEY));
     }
 
     @Test
@@ -620,7 +719,7 @@ public class ObservationDepositUiControllerTest
     {
         Observation observation = spy(new Observation(sbid));
         doReturn(observationFailed).when(observation).isFailedDeposit();
-        Set<ChildDepositableArtefact> depositableArtefacts = new HashSet<>();
+        List<ChildDepositableArtefact> depositableArtefacts = new ArrayList<>();
         ImageCube imageCube = spy(new ImageCube());
         doReturn(fileId).when(imageCube).getFileId();
         doReturn(artefactFailed).when(imageCube).isFailedDeposit();
@@ -628,5 +727,55 @@ public class ObservationDepositUiControllerTest
         when(observation.getDepositableArtefacts()).thenReturn(depositableArtefacts);
 
         return observation;
+    }
+
+    @Test
+    public void testSuccessfulRedepositObservation() throws Exception
+    {
+        int sbid = 1111;
+        String fileId = "some-file.xml";
+
+        HttpServletRequest httpServletRequest = mock(HttpServletRequest.class);
+        Observation observation = createTestObservation(sbid, fileId, false, false);
+        observation.setDepositState(new IntermediateDepositState(Type.DEPOSITED, null, observation));
+        when(observationRepository.findBySbid(anyInt())).thenReturn(observation);
+        when(depositManagerService.redepositObservation(anyInt())).thenReturn(true);
+
+        controller.redeposit(httpServletRequest, sbid);
+
+        testAppender.verifyLogMessage(Level.INFO, "Deposit manager observation " + sbid + " requested to redeposit.");
+        String message = DepositManagerEvents.E153.messageBuilder().add(sbid).toString();
+        testAppender.verifyLogMessage(Level.INFO, message);
+        assertThat(message, containsString(Integer.toString(sbid)));
+
+        verify(flashHelper).flash(httpServletRequest, "success", "Observation redeposit started.");
+
+        assertEquals(new RedirectView(ObservationDepositUiController.getPathForShowObservation(sbid)).getUrl(),
+                controller.recoverDeposit(httpServletRequest, sbid, fileId).getUrl());
+    }
+
+    @Test
+    public void testFailedRedepositObservation() throws Exception
+    {
+        int sbid = 1111;
+        String fileId = "some-file.xml";
+
+        HttpServletRequest httpServletRequest = mock(HttpServletRequest.class);
+        Observation observation = createTestObservation(sbid, fileId, false, false);
+        observation.setDepositState(new IntermediateDepositState(Type.DEPOSITED, null, observation));
+        when(observationRepository.findBySbid(anyInt())).thenReturn(observation);
+        when(depositManagerService.redepositObservation(anyInt())).thenReturn(false);
+
+        controller.redeposit(httpServletRequest, sbid);
+
+        testAppender.verifyLogMessage(Level.INFO, "Deposit manager observation " + sbid + " requested to redeposit.");
+        String message = DepositManagerEvents.E152.messageBuilder().add(sbid).toString();
+        testAppender.verifyLogMessage(Level.ERROR, message);
+        assertThat(message, containsString(Integer.toString(sbid)));
+
+        verify(flashHelper).flash(httpServletRequest, "error", "Request to redeposit observation failed.");
+
+        assertEquals(new RedirectView(ObservationDepositUiController.getPathForShowObservation(sbid)).getUrl(),
+                controller.recoverDeposit(httpServletRequest, sbid, fileId).getUrl());
     }
 }

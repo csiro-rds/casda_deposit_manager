@@ -1,5 +1,7 @@
 package au.csiro.casda.datadeposit;
 
+import au.csiro.casda.entity.observation.EncapsulationFile;
+
 /*
  * #%L
  * CSIRO ASKAP Science Data Archive
@@ -40,6 +42,15 @@ public class ArchivedDepositState extends DepositState
     public void progress()
     {
         transitionTo(DepositState.Type.DEPOSITED);
+        if(getDepositable() instanceof EncapsulationFile)
+        {
+        	for(ChildDepositableArtefact artifact : ((EncapsulationFile)getDepositable()).getAllEncapsulatedArtefacts())
+        	{
+        		//all encapsulated artifacts must be ENCAPSULATED before the EncapsulationFile reaches this state
+        		//so progressing them now will cause them to transition to the DEPOSITED state
+        		artifact.progressDeposit();
+        	}
+        }
     }
 
     /**

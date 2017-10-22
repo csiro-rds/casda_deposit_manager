@@ -1,0 +1,2 @@
+update casda.data_access_job set download_mode = 'SODA_SYNC_WEB' where download_mode = 'SODA_SYNC';
+update casda.data_access_job set download_mode = 'SODA_ASYNC_WEB' where download_mode = 'SODA_ASYNC';

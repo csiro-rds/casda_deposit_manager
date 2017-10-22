@@ -99,7 +99,7 @@ public class CasdaStagingDepositStateTest
         casdaToolProcessJobBuilder.setCommand("STAGE_TOOL");
         casdaToolProcessJobBuilder.addCommandArguments(Utils.elStringToArray(ngas));
 
-        Catalogue artefact = new Catalogue(CatalogueType.LEVEL7);
+        Catalogue artefact = new Catalogue(CatalogueType.DERIVED_CATALOGUE);
         artefact.setFilename("filename");
         artefact.setParent(new Level7Collection(123));
         Map<String, String> map = new HashMap<>();
@@ -115,7 +115,7 @@ public class CasdaStagingDepositStateTest
         assertEquals("-infile", commandAndArgs[3]);
         assertEquals("/askap/askap_03_dev_fs/level7_deposit/123/filename", commandAndArgs[4]);
         assertEquals("-parent-type", commandAndArgs[5]);
-        assertEquals("level7", commandAndArgs[6]);
+        assertEquals("derived-catalogue", commandAndArgs[6]);
         assertEquals("-staging_volume", commandAndArgs[7]);
         assertEquals("somewhere", commandAndArgs[8]);
         assertEquals("-file_id", commandAndArgs[9]);

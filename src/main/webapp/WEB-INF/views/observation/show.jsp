@@ -80,22 +80,50 @@
                                 <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
                             </form>
                         </c:if>
+                        <c:if test="${observation.deposited}">
+                            <form method="post" action="${observation.sbid}/redeposit">
+                                <input type="submit" value="Redeposit"></input>
+                                <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
+                            </form>
+                        </c:if>
+                    </td>
+                    <td>
+                        <c:if test="${observation.deposited}">
+                            <form method="post" action="${observation.sbid}/refresh">
+                                <input type="submit" value="Refresh Metadata"></input>
+                                <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
+                            </form>
+                        </c:if>
                     </td>
                 </tr>
                 <tr>
                     <td><strong>Deposit Started Date</strong></td>
                     <td>${observation.depositStarted}</td>
-                    <td></td>
+                    <td colspan=2></td>
                 </tr>
                 <tr>
                     <td><strong>Deposit Completed Date</strong></td>
                     <td>${observation.depositStateChanged}</td>
-                    <td></td>
+                    <td colspan=2></td>
                 </tr>
             </table>
     
-            <h3>Observation Artefacts</h3>
-    
+    <table>
+    	<tr>
+    	<td>
+    		<h3>Observation Artefacts</h3>
+    	</td>
+    	<td>
+          <c:if test="${artefactFailed and not observation.failedDeposit}">
+             <form method="post" action="${observation.sbid}/recover/all">
+                 <input type="submit" value="Recover All"></input>
+                 <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
+             </form>
+           </c:if>
+    	</td>
+    	</tr>
+    </table>
+            
             <table class="obsTable">
     
                 <tr class="tableHeader">
@@ -141,6 +169,34 @@
                             <c:catch var="exception">${depositable.project.opalCode }
                             </c:catch><c:if test="${not empty exception}">N/A</c:if>
                         </td>
+                    </tr>
+                </c:forEach>
+    
+                <c:set var="prevRemainder" value="0" />
+                <c:if test="${rowStyle eq 'odd'}">
+                	<c:set var="prevRemainder" value="1" />
+                </c:if>
+                <c:forEach var="summary" items="${artefactSummaries}" varStatus="rowCounter">
+                	
+                    <c:choose>
+                        <c:when test="${(prevRemainder+rowCounter.count) % 2 == 0}">
+                            <c:set var="rowStyle" scope="page" value="even" />
+                        </c:when>
+                        <c:otherwise>
+                            <c:set var="rowStyle" scope="page" value="odd" />
+                        </c:otherwise>
+                    </c:choose>
+    
+                    <tr class="${rowStyle}">
+                        <td>${summary.description}</td>
+                        <td>${summary.numArtefacts} file(s)</td>
+                        <td>${summary.depositStateDescription}</td>
+                        <td>${summary.depositStateChanged}</td>
+                        <td>${summary.checkpointStateType}</td>
+                        <!-- Only display the released date if it is valid for that artefact type -->
+                        <td>${summary.releasedDateString}</td>
+                        <!-- Only display the project code if it is valid for that artefact type -->
+                        <td>${summary.projectCode }</td>
                     </tr>
                 </c:forEach>
             </table>

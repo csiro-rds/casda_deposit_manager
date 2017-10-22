@@ -61,11 +61,10 @@ public class DepositableArtefactDTOTest extends AbstractMarshallingTest<Deposita
     {
         super.validateJsonSerialisedObject(testObj, map);
 
-        assertThat(map.keySet().size(), equalTo(5));
         assertThat(
                 map.keySet(),
                 containsInAnyOrder("depositState", "depositableTypeDescription", "filename", "filesizeInBytes",
-                        "checksum"));
+                        "checksum", "thumbnailName"));
         assertThat(map.get("depositState"), instanceOf(String.class));
         assertThat((String) map.get("depositState"), equalTo(testObj.getDepositState().toString()));
         assertThat(map.get("depositableTypeDescription"), instanceOf(String.class));

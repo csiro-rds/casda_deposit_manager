@@ -16,9 +16,11 @@ package au.csiro.casda.dto;
 import java.io.Serializable;
 
 import au.csiro.casda.entity.observation.Catalogue;
-import au.csiro.casda.entity.observation.CatalogueType;
+import au.csiro.casda.entity.observation.Cubelet;
 import au.csiro.casda.entity.observation.ImageCube;
 import au.csiro.casda.entity.observation.MeasurementSet;
+import au.csiro.casda.entity.observation.MomentMap;
+import au.csiro.casda.entity.observation.Spectrum;
 
 /**
  * Data product information for transfer to casda rules.
@@ -59,13 +61,19 @@ public class DataProductDTO implements Serializable
         /** Measurement set (Visibility) */
         MEASUREMENT_SET,
         /** Image cube */
-        IMAGE_CUBE
+        IMAGE_CUBE,
+        /** Spectrum - 1D view of a quantity by a wavelength related measurement */
+        SPECTRUM,
+        /** Moment Map - 2D view of wavelength related measurement */
+        MOMENT_MAP,
+        /** Cubelet - 3D cutout of image cube */
+        CUBELET
 
     }
 
     private long id;
     private DataProductType type;
-    private CatalogueType catalogueType;
+    private String subType;
     private String identifier;
     private QualityLevel qualityLevel;
 
@@ -84,8 +92,9 @@ public class DataProductDTO implements Serializable
      */
     public DataProductDTO(Catalogue catalogue)
     {
-        this(catalogue.getId(), DataProductType.CATALOGUE, catalogue.getCatalogueType(), catalogue.getFileId(),
-                catalogue.getQualityLevel() == null ? null : QualityLevel.valueOf(catalogue.getQualityLevel().name()));
+        this(catalogue.getId(), DataProductType.CATALOGUE, catalogue.getCatalogueType().toString(), 
+        		catalogue.getFileId(), catalogue.getQualityLevel() == null ? null : 
+        			QualityLevel.valueOf(catalogue.getQualityLevel().name()));
     }
 
     /**
@@ -108,8 +117,44 @@ public class DataProductDTO implements Serializable
      */
     public DataProductDTO(ImageCube imageCube)
     {
-        this(imageCube.getId(), DataProductType.IMAGE_CUBE, null, imageCube.getFileId(),
+        this(imageCube.getId(), DataProductType.IMAGE_CUBE, imageCube.getType(), imageCube.getFileId(),
                 imageCube.getQualityLevel() == null ? null : QualityLevel.valueOf(imageCube.getQualityLevel().name()));
+    }
+
+    /**
+     * Constructor for spectrum
+     * 
+     * @param spectrum
+     *            the spectrum
+     */
+    public DataProductDTO(Spectrum spectrum)
+    {
+        this(spectrum.getId(), DataProductType.SPECTRUM, spectrum.getType(), spectrum.getFileId(),
+                spectrum.getQualityLevel() == null ? null : QualityLevel.valueOf(spectrum.getQualityLevel().name()));
+    }
+
+    /**
+     * Constructor for moment map
+     * 
+     * @param momentMap
+     *            the moment map
+     */
+    public DataProductDTO(MomentMap momentMap)
+    {
+        this(momentMap.getId(), DataProductType.MOMENT_MAP, momentMap.getType(), momentMap.getFileId(),
+                momentMap.getQualityLevel() == null ? null : QualityLevel.valueOf(momentMap.getQualityLevel().name()));
+    }
+    
+    /**
+     * Constructor for cubelet
+     * 
+     * @param cubelet
+     *            the cubelet
+     */
+    public DataProductDTO(Cubelet cubelet)
+    {
+        this(cubelet.getId(), DataProductType.CUBELET, cubelet.getType(), cubelet.getFileId(),
+        		cubelet.getQualityLevel() == null ? null : QualityLevel.valueOf(cubelet.getQualityLevel().name()));
     }
 
     /**
@@ -119,19 +164,19 @@ public class DataProductDTO implements Serializable
      *            the data product id
      * @param type
      *            the data product type
-     * @param catalogueType
+     * @param subType
      *            the data product subtype
      * @param identifier
      *            the data product file identifier
      * @param qualityLevel
      *            the quality level
      */
-    public DataProductDTO(long id, DataProductType type, CatalogueType catalogueType, String identifier,
+    public DataProductDTO(long id, DataProductType type, String subType, String identifier,
             QualityLevel qualityLevel)
     {
         this.id = id;
         this.type = type;
-        this.catalogueType = catalogueType;
+        this.subType = subType;
         this.identifier = identifier;
         this.qualityLevel = qualityLevel;
     }
@@ -176,13 +221,13 @@ public class DataProductDTO implements Serializable
         this.identifier = identifier;
     }
 
-    public CatalogueType getCatalogueType()
+    public String getSubType()
     {
-        return catalogueType;
+        return subType;
     }
 
-    public void setCatalogueType(CatalogueType catalogueType)
+    public void setSubType(String subType)
     {
-        this.catalogueType = catalogueType;
+        this.subType = subType;
     }
 }

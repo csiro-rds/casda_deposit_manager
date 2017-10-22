@@ -21,6 +21,7 @@ import org.junit.Test;
 
 import au.csiro.AbstractMarshallingTest;
 import au.csiro.casda.entity.ValidationNote;
+import au.csiro.casda.entity.observation.Project;
 
 /**
  * Tests JSON serialisation and deserialisation of ValidationNoteDTO class
@@ -47,14 +48,15 @@ public class ValidationNoteDTOTest extends AbstractMarshallingTest<ValidationNot
     public void testConstructor()
     {
         DateTime now = DateTime.now(DateTimeZone.UTC);
-        
+    	Project project = new Project();
+    	project.setId(12L);
         ValidationNote validationNote = new ValidationNote();
         validationNote.setContent("the content");
         validationNote.setCreated(now);
         validationNote.setId(228L);
         validationNote.setPersonId("person123");
         validationNote.setPersonName("Person Name");
-        validationNote.setProjectId(11L);
+        validationNote.setProject(project);
         validationNote.setSbid(152);
 
         ValidationNoteDTO validationNoteDto = new ValidationNoteDTO(validationNote);

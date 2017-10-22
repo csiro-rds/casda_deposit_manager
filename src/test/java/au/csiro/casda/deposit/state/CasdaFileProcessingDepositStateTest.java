@@ -35,7 +35,6 @@ import au.csiro.casda.datadeposit.DepositState;
 import au.csiro.casda.datadeposit.DepositState.Type;
 import au.csiro.casda.datadeposit.DepositStateFactory;
 import au.csiro.casda.entity.CasdaDepositableArtefactEntity;
-import au.csiro.casda.entity.observation.EvaluationFile;
 import au.csiro.casda.entity.observation.MeasurementSet;
 import au.csiro.casda.entity.observation.Observation;
 
@@ -102,46 +101,6 @@ public class CasdaFileProcessingDepositStateTest
         observation.addMeasurementSet(measurementSet);
         
         verifyProcessingStage(measurementSet, "Measurementset.tar", 2049, 3);
-    }
-    
-    @Test
-    public void testEvaluationFileProcessing() throws IOException
-    {
-        Observation observation = new Observation();
-        EvaluationFile evaluationFile = new EvaluationFile();
-        observation.addEvaluationFile(evaluationFile);
-        
-        verifyProcessingStage(evaluationFile, "evaluation.pdf", 1024, 1);
-    }
-    
-    @Test
-    public void testEvaluationFileProcessingSize2047() throws IOException
-    {
-        Observation observation = new Observation();
-        EvaluationFile evaluationFile = new EvaluationFile();
-        observation.addEvaluationFile(evaluationFile);
-        
-        verifyProcessingStage(evaluationFile, "evaluation.pdf", 2047, 2);
-    }
-    
-    @Test
-    public void testEvaluationFileProcessingSize2048() throws IOException
-    {
-        Observation observation = new Observation();
-        EvaluationFile evaluationFile = new EvaluationFile();
-        observation.addEvaluationFile(evaluationFile);
-        
-        verifyProcessingStage(evaluationFile, "evaluation.pdf", 2048, 2);
-    }
-    
-    @Test
-    public void testEvaluationFileProcessingSize2049() throws IOException
-    {
-        Observation observation = new Observation();
-        EvaluationFile evaluationFile = new EvaluationFile();
-        observation.addEvaluationFile(evaluationFile);
-        
-        verifyProcessingStage(evaluationFile, "evaluation.pdf", 2049, 3);
     }
 
     private void verifyProcessingStage(CasdaDepositableArtefactEntity target, String name, long expectedSize,

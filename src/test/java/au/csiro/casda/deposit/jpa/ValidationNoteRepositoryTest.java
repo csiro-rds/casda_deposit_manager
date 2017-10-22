@@ -26,6 +26,7 @@ import org.springframework.test.context.ContextConfiguration;
 
 import au.csiro.casda.deposit.TestAppConfig;
 import au.csiro.casda.entity.ValidationNote;
+import au.csiro.casda.entity.observation.Project;
 
 /**
  * Tests the validation note repository.
@@ -39,6 +40,7 @@ public class ValidationNoteRepositoryTest extends AbstractPersistenceTest
     @Autowired
     private ValidationNoteRepository validationNoteRepository;
 
+    private TestProjectRepository projectRepository;
     private TestValidationNoteRepository testValidationNoteRepository;
 
     public ValidationNoteRepositoryTest() throws Exception
@@ -55,48 +57,52 @@ public class ValidationNoteRepositoryTest extends AbstractPersistenceTest
     protected void initializeRepositories(RepositoryFactorySupport rfs)
     {
         testValidationNoteRepository = rfs.getRepository(TestValidationNoteRepository.class);
+        projectRepository = rfs.getRepository(TestProjectRepository.class);
     }
 
     @Test
     public void testFindByActiveOrderByDisplayOrderAsc()
     {
+        String opalCode = "AS007";
+        Project project = new Project(opalCode);
+        project = projectRepository.save(project);
+
         ValidationNote note1 = new ValidationNote();
         note1.setContent("blah blah one");
         note1.setCreated(DateTime.now(DateTimeZone.UTC));
         note1.setPersonId("abc111");
         note1.setPersonName("name one");
         note1.setSbid(111);
-        note1.setProjectId(12L);
-
+        note1.setProject(project);
+        testValidationNoteRepository.save(note1);
+        
         ValidationNote note2 = new ValidationNote();
         note2.setContent("blah blah two");
         note2.setCreated(DateTime.now(DateTimeZone.UTC).minusDays(1));
         note2.setPersonId("abc123");
         note2.setPersonName("name two");
         note2.setSbid(111);
-        note2.setProjectId(12L);
-
+        note2.setProject(project);
+        testValidationNoteRepository.save(note2);
+        
         ValidationNote note3 = new ValidationNote();
         note3.setContent("blah blah three");
         note3.setCreated(DateTime.now(DateTimeZone.UTC).minusDays(1));
         note3.setPersonId("abc123");
         note3.setPersonName("name two");
         note3.setSbid(115);
-        note3.setProjectId(12L);
-
-        testValidationNoteRepository.save(note1);
-        testValidationNoteRepository.save(note2);
+        note3.setProject(project);
         testValidationNoteRepository.save(note3);
 
         commit();
 
         List<ValidationNote> validationNotes =
-                validationNoteRepository.findBySbidAndProjectIdOrderByCreatedAsc(111, 12L);
+                validationNoteRepository.findBySbidAndProjectIdOrderByCreatedAsc(111, project.getId());
         assertEquals(2, validationNotes.size());
         assertEquals("blah blah two", validationNotes.get(0).getContent());
         assertEquals("blah blah one", validationNotes.get(1).getContent());
 
-        validationNotes = validationNoteRepository.findBySbidAndProjectIdOrderByCreatedAsc(115, 12L);
+        validationNotes = validationNoteRepository.findBySbidAndProjectIdOrderByCreatedAsc(115, project.getId());
         assertEquals(1, validationNotes.size());
         assertEquals("blah blah three", validationNotes.get(0).getContent());
     }

@@ -28,6 +28,8 @@ public class DepositableArtefactDTO extends DepositableDTO implements Serializab
     private Long filesizeInBytes;
     
     private String checksum;
+
+    private String thumbnailName;
     
     /**
      * Empty constructor, for JSON deserialisation
@@ -64,5 +66,15 @@ public class DepositableArtefactDTO extends DepositableDTO implements Serializab
     public void setChecksum(String checksum)
     {
         this.checksum = checksum;
+    }
+
+    public String getThumbnailName()
+    {
+        return thumbnailName;
+    }
+
+    public void setThumbnailName(String thumbnailName)
+    {
+        this.thumbnailName = thumbnailName;
     }
 }

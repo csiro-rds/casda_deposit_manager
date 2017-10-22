@@ -70,7 +70,8 @@ public class DepositProcessingControllerIntegrationTest
         HttpEntity<MultiValueMap<String, Object>> fileEntity =
                 new HttpEntity<MultiValueMap<String, Object>>(map, headers);
 
-        MessageDTO response = new SecuredRestTemplate().postForObject(uri, fileEntity, MessageDTO.class);
+        MessageDTO response = new SecuredRestTemplate(SecuredRestTemplate.DEFAULT_RESTTEMPLATE_CONNECT_TIMEOUT)
+        		.postForObject(uri, fileEntity, MessageDTO.class);
         // System.out.println(response.toString());
         assertEquals(MessageCode.SUCCESS, response.getMessageCode());
     }
@@ -88,7 +89,8 @@ public class DepositProcessingControllerIntegrationTest
 
         URI uri = uriBuilder.build();
 
-        MessageDTO response = new SecuredRestTemplate().postForObject(uri, null, MessageDTO.class);
+        MessageDTO response = new SecuredRestTemplate(SecuredRestTemplate.DEFAULT_RESTTEMPLATE_CONNECT_TIMEOUT)
+        		.postForObject(uri, null, MessageDTO.class);
         // System.out.println(response.toString());
         assertEquals(MessageCode.SUCCESS, response.getMessageCode());
     }

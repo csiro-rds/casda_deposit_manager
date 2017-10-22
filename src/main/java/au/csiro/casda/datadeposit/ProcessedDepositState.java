@@ -14,7 +14,7 @@ package au.csiro.casda.datadeposit;
 
 /**
  * Default implementation of DepositState for the DepositState.Type.PROCESSED state that simply transitions to the
- * COPYING state.
+ * STAGING state, or for files which need to be encapsulated the ENCAPSULATING state.
  * <p>
  * Copyright 2014, CSIRO Australia. All rights reserved.
  */
@@ -40,7 +40,7 @@ public class ProcessedDepositState extends DepositState
     @Override
     public void progress()
     {
-        transitionTo(DepositState.Type.STAGING);
+    	transitionTo(DepositState.Type.STAGING); 
     }
 
     /**

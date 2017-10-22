@@ -1,0 +1,1 @@
+update casda.scan set polarisations = REPLACE(REPLACE(REPLACE(polarisations, ']', '/'), '[', '/'), ', ', '/');

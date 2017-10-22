@@ -75,6 +75,11 @@ public abstract class BaseArchivingDepositStateTest
     @Value("${archivingDepositStateTest.success.mig.command}")
     protected String successMigCommand;
 
+    @Autowired
+    @Value("${archivingDepositStateTest.failing.na.command}")
+    protected String failingNaCommand;
+
+    
     @Mock
     protected NgasService ngasService;
 
@@ -180,6 +185,15 @@ public abstract class BaseArchivingDepositStateTest
     {
         // in progress
         CasdaArchivingDepositState state = getState(successMigCommand);
+
+        state.progress();
+        assertThat(state.getDepositable().getDepositState().getType(), is(DepositState.Type.ARCHIVING));
+    }
+
+    @Test
+    public void testCommandFailingNa()
+    {
+        CasdaArchivingDepositState state = getState(failingNaCommand);
 
         state.progress();
         assertThat(state.getDepositable().getDepositState().getType(), is(DepositState.Type.ARCHIVING));

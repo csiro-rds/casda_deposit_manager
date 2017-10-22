@@ -58,6 +58,7 @@ public interface OpalProjectService
      * @throws ResourceNotFoundException
      *             if the Project matching the opalCode could not be found
      * @throws BadRequestException 
+     * 				for a bad service request
      */
     public Project updateProjectWithOpalData(String opalCode, String shortName, String principalFirstName,
             String principalLastName) throws ResourceNotFoundException, BadRequestException;

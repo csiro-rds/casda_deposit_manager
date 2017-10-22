@@ -36,7 +36,7 @@ public class CasdaFileProcessingDepositState extends ProcessingDepositState
      * Constructor
      * 
      * @param stateFactory
-     *            see {@link DepositState}
+     *            see {@link DepositStateFactory}
      * @param depositable
      *            the data product that the state pertains to
      * @param parentDirectory

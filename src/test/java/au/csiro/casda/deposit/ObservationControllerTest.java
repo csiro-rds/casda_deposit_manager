@@ -197,6 +197,21 @@ public class ObservationControllerTest
     }
 
     @Test
+    public void testSuccessfulGetProjectBlocksRefreshed() throws Exception
+    {
+        Long date = System.currentTimeMillis() - 200000;
+
+        ArgumentCaptor<Long> timeCaptor = ArgumentCaptor.forClass(Long.class);
+
+        observationController.getProjectBlocks("refreshed", "AS123", date);
+
+        verify(mockObservationService).getRefreshedProjectBlocks(timeCaptor.capture());
+
+        assertEquals(date, timeCaptor.getValue());
+
+    }
+
+    @Test
     public void testInvalidDate() throws Exception
     {
         this.mockMvc.perform(get("/observations/all/projects?state=released&projectCode=AS123&date=blah"))
@@ -290,8 +305,8 @@ public class ObservationControllerTest
                 this.mockMvc.perform(get("/observations/{sbid}/projects/{opalCode}/dataproducts", sbid, opalCode))
                         .andExpect(status().isOk());
         resultIsOk.andExpect(content().contentType(MediaType.APPLICATION_JSON));
-        resultIsOk.andExpect(jsonPath("$opalCode").value("ABC123"));
-        resultIsOk.andExpect(jsonPath("$sbid").value(12345));
+        resultIsOk.andExpect(jsonPath("$.opalCode").value("ABC123"));
+        resultIsOk.andExpect(jsonPath("$.sbid").value(12345));
     }
 
     @Test
